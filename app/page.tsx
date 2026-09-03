@@ -29,6 +29,8 @@ import {
   MessageSquareText,
   MoreHorizontal,
   MoveVertical,
+  Monitor,
+  Moon,
   Palette,
   PanelsTopLeft,
   Plus,
@@ -42,6 +44,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
+  Sun,
   SquarePen,
   SwatchBook,
   TextCursorInput,
@@ -55,6 +58,7 @@ import { useEffect, useRef, useState } from 'react';
 
 type Tab = 'home' | 'longshot' | 'tools' | 'templates' | 'profile';
 type ToolId = 'redact' | 'ocr' | 'annotate' | 'idphoto' | 'watermark' | 'compress' | 'qrcode' | 'format';
+type Theme = 'system' | 'light' | 'dark';
 type Shot = { id: number; name: string; meta: string; url?: string; tone: string };
 
 const navItems: Array<{ id: Tab; label: string; icon: LucideIcon }> = [
@@ -118,6 +122,33 @@ function AppLogo() {
   );
 }
 
+function ThemeSwitcher({ theme, onChange, compact = false }: { theme: Theme; onChange: (theme: Theme) => void; compact?: boolean }) {
+  const options: Array<{ id: Theme; label: string; icon: LucideIcon }> = [
+    { id: 'system', label: '自动', icon: Monitor },
+    { id: 'light', label: '浅色', icon: Sun },
+    { id: 'dark', label: '深色', icon: Moon },
+  ];
+  if (compact) {
+    const currentIndex = options.findIndex((item) => item.id === theme);
+    const current = options[currentIndex];
+    const CurrentIcon = current.icon;
+    const next = options[(currentIndex + 1) % options.length];
+    return (
+      <button className="theme-cycle" aria-label={`当前为${current.label}模式，切换到${next.label}模式`} onClick={() => onChange(next.id)}>
+        <CurrentIcon size={18} />
+      </button>
+    );
+  }
+  return (
+    <div className="theme-switcher" role="group" aria-label="外观模式">
+      {options.map((option) => {
+        const Icon = option.icon;
+        return <button key={option.id} className={theme === option.id ? 'active' : ''} onClick={() => onChange(option.id)}><Icon size={15} /><span>{option.label}</span></button>;
+      })}
+    </div>
+  );
+}
+
 function ScreenHeader({ title, subtitle, back, onBack, trailing }: { title: string; subtitle?: string; back?: boolean; onBack?: () => void; trailing?: React.ReactNode }) {
   return (
     <header className="screen-header">
@@ -130,13 +161,14 @@ function ScreenHeader({ title, subtitle, back, onBack, trailing }: { title: stri
   );
 }
 
-function HomeScreen({ onNavigate, onOpenTool, notify }: { onNavigate: (tab: Tab) => void; onOpenTool: (id: ToolId) => void; notify: (message: string) => void }) {
+function HomeScreen({ onNavigate, onOpenTool, notify, theme, onThemeChange }: { onNavigate: (tab: Tab) => void; onOpenTool: (id: ToolId) => void; notify: (message: string) => void; theme: Theme; onThemeChange: (theme: Theme) => void }) {
   return (
     <div className="screen-scroll home-screen">
       <header className="topbar">
         <div><span className="eyebrow">轻松截屏 · 高效处理</span><h1>截屏王</h1></div>
         <div className="top-actions">
           <button className="vip-pill" aria-label="打开会员中心" onClick={() => onNavigate('profile')}><Crown size={14} fill="currentColor" /> VIP</button>
+          <ThemeSwitcher theme={theme} onChange={onThemeChange} compact />
           <button className="icon-button" aria-label="设置" onClick={() => notify('设置已准备好，前往「我的」查看')}><Settings size={21} /></button>
         </div>
       </header>
@@ -464,7 +496,7 @@ function TemplateEditor({ id, onBack, notify }: { id: string; onBack: () => void
   );
 }
 
-function ProfileScreen({ notify }: { notify: (message: string) => void }) {
+function ProfileScreen({ notify, theme, onThemeChange }: { notify: (message: string) => void; theme: Theme; onThemeChange: (theme: Theme) => void }) {
   const [billing, setBilling] = useState<'year' | 'month'>('year');
   const [subscribed, setSubscribed] = useState(false);
   const menu = [
@@ -476,6 +508,10 @@ function ProfileScreen({ notify }: { notify: (message: string) => void }) {
       <div className="profile-card"><div className="profile-avatar"><UserRound size={31} /></div><span><strong>截屏小能手</strong><small>ID: 12345678 · {subscribed ? 'Pro 会员' : '普通会员'}</small></span><button onClick={() => notify('个人资料可编辑')}>编辑</button></div>
       <div className="stats-card"><span><strong>128</strong><small>截屏总数</small></span><span><strong>36</strong><small>编辑图片</small></span><span><strong>12</strong><small>我的模板</small></span></div>
       <div className="profile-menu">{menu.map(([title,hint,Icon]) => <button key={title} onClick={() => notify(`${title}已打开`)}><span><Icon size={18} /></span><span><strong>{title}</strong><small>{hint}</small></span><ChevronRight size={16} /></button>)}</div>
+      <section className="appearance-card">
+        <div><span><Palette size={18} /></span><span><strong>外观</strong><small>跟随系统，或选择浅色与深色模式</small></span></div>
+        <ThemeSwitcher theme={theme} onChange={(value) => { onThemeChange(value); notify(`已切换为${value === 'system' ? '自动' : value === 'light' ? '浅色' : '深色'}模式`); }} />
+      </section>
       <section className="membership-card"><div className="member-head"><span className="pro-crown"><Crown size={24} fill="currentColor" /></span><span><strong>{subscribed ? '已是 VIP 会员' : '成为 VIP 会员'}</strong><small>{subscribed ? '所有高级功能均已解锁' : '解锁全部高级功能'}</small></span></div>
         <div className="plan-options"><button className={billing === 'year' ? 'active' : ''} onClick={() => setBilling('year')}><span><strong>年度会员</strong><small>畅享所有 VIP 权益</small></span><b>38<small>元 / 年</small></b><i><Check size={12} /></i></button><button className={billing === 'month' ? 'active' : ''} onClick={() => setBilling('month')}><span><strong>月度会员</strong><small>灵活按月使用</small></span><b>18<small>元 / 月</small></b><i><Check size={12} /></i></button></div>
         <div className="benefits"><span><ShieldCheck size={17} />无限长截图</span><span><Eraser size={17} />智能去水印</span><span><FileScan size={17} />批量处理</span><span><CircleHelp size={17} />专属客服</span></div>
@@ -494,6 +530,8 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [activeTool, setActiveTool] = useState<ToolId | null>(null);
   const [activeTemplate, setActiveTemplate] = useState<string | null>(null);
+  const [theme, setTheme] = useState<Theme>('system');
+  const [systemDark, setSystemDark] = useState(false);
   const [toast, setToast] = useState('');
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -504,6 +542,23 @@ export default function HomePage() {
   };
   const navigate = (tab: Tab) => { setActiveTool(null); setActiveTemplate(null); setActiveTab(tab); };
   const openTool = (id: ToolId) => { setActiveTemplate(null); setActiveTab('tools'); setActiveTool(id); };
+
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const savedTheme = window.localStorage.getItem('screenshot-king-theme');
+    if (savedTheme === 'system' || savedTheme === 'light' || savedTheme === 'dark') setTheme(savedTheme);
+    setSystemDark(media.matches);
+    const syncSystemTheme = (event: MediaQueryListEvent) => setSystemDark(event.matches);
+    media.addEventListener('change', syncSystemTheme);
+    return () => media.removeEventListener('change', syncSystemTheme);
+  }, []);
+
+  useEffect(() => {
+    const resolvedTheme = theme === 'system' ? (systemDark ? 'dark' : 'light') : theme;
+    document.documentElement.dataset.theme = resolvedTheme;
+    document.documentElement.style.colorScheme = resolvedTheme;
+    window.localStorage.setItem('screenshot-king-theme', theme);
+  }, [theme, systemDark]);
 
   useEffect(() => {
     const context = (document as Document & { modelContext?: ModelContextLike }).modelContext;
@@ -524,23 +579,29 @@ export default function HomePage() {
       annotations: { readOnlyHint:false, untrustedContentHint:false },
       execute(input) { const tool = (input as { tool?: string }).tool; const exists = toolGroups.some((group) => group.items.some((item) => item.id === tool)); if (!exists) throw new Error('未知工具'); openTool(tool as ToolId); return { activeTool:tool }; },
     });
+    register({
+      name: 'set_screenshot_king_appearance', title: '设置截屏王外观', description: '将界面设置为自动、浅色或深色模式。',
+      inputSchema: { type:'object', properties:{ theme:{ type:'string', enum:['system','light','dark'] } }, required:['theme'], additionalProperties:false },
+      annotations: { readOnlyHint:false, untrustedContentHint:false },
+      execute(input) { const selectedTheme = (input as { theme?: string }).theme; if (selectedTheme !== 'system' && selectedTheme !== 'light' && selectedTheme !== 'dark') throw new Error('未知外观模式'); setTheme(selectedTheme); return { theme:selectedTheme }; },
+    });
     return () => lifecycle.abort();
   }, []);
 
   let screen: React.ReactNode;
   if (activeTool) screen = <ToolDetail key={activeTool} id={activeTool} onBack={() => setActiveTool(null)} notify={notify} />;
   else if (activeTemplate) screen = <TemplateEditor id={activeTemplate} onBack={() => setActiveTemplate(null)} notify={notify} />;
-  else if (activeTab === 'home') screen = <HomeScreen onNavigate={navigate} onOpenTool={openTool} notify={notify} />;
+  else if (activeTab === 'home') screen = <HomeScreen onNavigate={navigate} onOpenTool={openTool} notify={notify} theme={theme} onThemeChange={setTheme} />;
   else if (activeTab === 'longshot') screen = <LongShotScreen notify={notify} />;
   else if (activeTab === 'tools') screen = <ToolsScreen onOpenTool={openTool} />;
   else if (activeTab === 'templates') screen = <TemplatesScreen onSelect={setActiveTemplate} />;
-  else screen = <ProfileScreen notify={notify} />;
+  else screen = <ProfileScreen notify={notify} theme={theme} onThemeChange={setTheme} />;
 
   const showNav = !activeTool && !activeTemplate;
   return (
     <main className="site-shell">
       <section className="brand-panel" aria-label="产品介绍">
-        <div className="brand-lockup"><AppLogo /><span><strong>截屏王</strong><small>Screenshot King</small></span></div>
+        <div className="brand-top"><div className="brand-lockup"><AppLogo /><span><strong>截屏王</strong><small>Screenshot King</small></span></div><ThemeSwitcher theme={theme} onChange={setTheme} /></div>
         <div className="brand-copy"><span className="brand-tag">交互设计原型 · 2026</span><h2>让每一次截屏，<br />都成为<span>清晰表达。</span></h2><p>从捕捉、识别到编辑与分享，所有高频图片任务都在一个轻盈流畅的工作流里完成。</p></div>
         <div className="feature-chips"><span><FileScan size={16} /> 智能识别</span><span><LockKeyhole size={16} /> 隐私保护</span><span><Images size={16} /> 本地处理</span></div>
       </section>
