@@ -122,6 +122,10 @@ function AppLogo() {
 
 type ResultArtworkKind = ToolId | 'longshot' | 'ninegrid' | 'commerce';
 
+function FocusCorners({ className = '' }: { className?: string }) {
+  return <span className={`focus-corners ${className}`} aria-hidden="true"><i /><i /><i /><i /></span>;
+}
+
 function ResultArtwork({ kind }: { kind: ResultArtworkKind }) {
   const iconMap: Record<ResultArtworkKind, LucideIcon> = {
     longshot: PanelsTopLeft,
@@ -140,7 +144,8 @@ function ResultArtwork({ kind }: { kind: ResultArtworkKind }) {
   return (
     <span className={`result-art result-art-${kind}`} aria-hidden="true">
       <span className="result-art-glow" />
-      {kind === 'longshot' ? <span className="art-longshot"><i /><i /><i /><b>4 → 1</b></span> : null}
+      <FocusCorners className="result-focus" />
+      {kind === 'longshot' ? <span className="art-longshot"><i /><i /><i /><em /><b>4 → 1</b></span> : null}
       {kind === 'redact' ? <span className="art-redact"><i /><i /><b /><i /><em /></span> : null}
       {kind === 'ocr' ? <span className="art-ocr"><i /><i /><i /><i /><b>TEXT</b></span> : null}
       {kind === 'annotate' ? <span className="art-annotate"><i /><i /><i /><b>↗</b><em>1</em></span> : null}
@@ -223,8 +228,9 @@ function HomeScreen({ onNavigate, onOpenTool, notify }: { onNavigate: (tab: Tab)
         </div>
       </header>
 
-      <section className="hero-card smart-task-card">
+      <section className="hero-card smart-task-card" aria-label="发现可处理的连续截图">
         <span className="hero-orb hero-orb-one" /><span className="hero-orb hero-orb-two" />
+        <FocusCorners className="hero-focus" />
         <span className="hero-copy">
           <span className="hero-kicker"><Sparkles size={15} /> 发现 6 张连续截图</span>
           <strong>看起来是一段聊天记录</strong>
@@ -235,12 +241,13 @@ function HomeScreen({ onNavigate, onOpenTool, notify }: { onNavigate: (tab: Tab)
       </section>
 
       <section className="section-block">
-        <div className="section-title"><h2>常用工具</h2><button onClick={() => onNavigate('tools')}>全部工具 <span>›</span></button></div>
+        <div className="section-title"><h2>推荐处理</h2><button onClick={() => onNavigate('tools')}>全部工具 <span>›</span></button></div>
         <div className="tool-grid">
           {homeToolCards.map((tool) => {
             const Icon = tool.icon;
             return (
               <button key={tool.id} className="tool-card" onClick={() => onOpenTool(tool.id)}>
+                <span className="tool-card-visual"><ResultArtwork kind={tool.id} /></span>
                 <span className="tool-card-copy"><span className="tool-icon blue"><Icon size={20} /></span><span><strong>{tool.label}</strong><small>{tool.hint}</small></span></span>
                 <span className="tool-card-scene">{tool.scene}</span>
               </button>
@@ -309,7 +316,7 @@ function LongShotScreen({ notify }: { notify: (message: string) => void }) {
 
   if (stitched) {
     return (
-      <div className="screen-scroll app-screen longshot-screen" {...resultBackGesture}>
+      <div className="screen-scroll app-screen longshot-screen result-workspace" {...resultBackGesture}>
         <ScreenHeader title="导出长图" back onBack={leaveResult} trailing={<span className="vip-pill"><Crown size={13} fill="currentColor" />VIP</span>} />
         <div className={`result-status ${saved ? 'saved' : ''}`}><span><Check size={15} /></span><div><strong>{saved ? '已存入照片' : '拼接完成'}</strong><small>{saved ? '长图已保存在本机相册' : '已自动消除重叠区域'}</small></div></div>
         <div className="long-result">{shots.map((shot) => <ShotPreview key={shot.id} shot={shot} tall />)}</div>
@@ -326,7 +333,7 @@ function LongShotScreen({ notify }: { notify: (message: string) => void }) {
   }
 
   return (
-    <div className="screen-scroll app-screen longshot-screen">
+    <div className="screen-scroll app-screen longshot-screen editing-workspace">
       <ScreenHeader large title="长截图" trailing={<button className="icon-button" onClick={() => notify('长截图设置已打开')} aria-label="长截图设置"><Settings size={20} /></button>} />
       <div className="segmented-control">
         <button className={mode === 'image' ? 'active' : ''} onClick={() => setMode('image')}>添加截图</button>
@@ -404,7 +411,7 @@ function RedactTool({ notify }: { notify: (message: string) => void }) {
   const [photo, setPhoto] = useState<PickedPhoto | null>(null);
   return (
     <>
-      <div className="detection-banner"><ShieldCheck size={17} /><strong>{!photo ? '选择图片后自动识别' : completed ? '处理完成' : '已识别 4 处隐私内容'}</strong>{photo ? <button onClick={() => setCompleted(false)}>重新识别</button> : null}</div>
+      <div className={`detection-banner ${completed ? 'is-complete' : ''}`}><ShieldCheck size={17} /><strong>{!photo ? '选择图片后自动识别' : completed ? '处理完成' : '已识别 4 处隐私内容'}</strong>{photo ? <button onClick={() => setCompleted(false)}>重新识别</button> : null}</div>
       <div className={`chat-preview ${photo ? `photo-tone-${photo.tone}` : ''}`} style={photo?.url ? { backgroundImage: `linear-gradient(rgba(244,248,252,.82),rgba(244,248,252,.82)),url(${photo.url})` } : undefined}>
         {photo ? <span className="source-chip"><Images size={13} />{photo.name}</span> : null}
         <div className="chat-bubble left"><span className="avatar-mask" style={{ filter: method === '模糊' ? `blur(${strength / 12}px)` : undefined }} />周末一起去露营吧，地点我发你～</div>
@@ -569,7 +576,7 @@ function ToolDetail({ id, onBack, notify, onUpgrade, subscribed }: { id: ToolId;
   const titles: Record<ToolId, string> = { redact:'智能打码', ocr:'图片转文字', annotate:'图片标注', idphoto:'证件照', watermark:'添加水印', compress:'图片压缩', qrcode:'制作二维码', format:'高清格式转换' };
   const backGesture = useEdgeSwipeBack(onBack);
   return (
-    <div className={`screen-scroll app-screen detail-screen detail-${id}`} {...backGesture}>
+    <div className={`screen-scroll app-screen detail-screen detail-${id} editing-workspace tool-workspace`} {...backGesture}>
       <ScreenHeader title={titles[id]} back onBack={onBack} trailing={<button className="icon-button" onClick={() => notify('工具设置已打开')} aria-label="工具设置"><Settings size={20} /></button>} />
       {id === 'redact' ? <RedactTool notify={notify} /> : id === 'ocr' ? <OcrTool notify={notify} /> : id === 'annotate' ? <AnnotateTool notify={notify} /> : id === 'idphoto' ? <IdPhotoTool notify={notify} /> : <GenericTool id={id} notify={notify} onUpgrade={onUpgrade} subscribed={subscribed} />}
     </div>
@@ -682,7 +689,7 @@ function TemplateEditor({ id, onBack, notify, onUpgrade, subscribed }: { id: str
     notify('照片顺序已调整');
   };
   return (
-    <div className="screen-scroll app-screen detail-screen template-editor-screen" {...backGesture}>
+    <div className={`screen-scroll app-screen detail-screen template-editor-screen ${saved ? 'result-workspace' : 'editing-workspace'}`} {...backGesture}>
       <ScreenHeader title={saved ? '预览' : template.title} back onBack={onBack} trailing={<button className="text-action" onClick={saved ? onBack : hasContent ? generatePreview : startContentEntry}>{saved ? '完成' : hasContent ? '预览' : '选照片'}</button>} />
       <div className="template-editor-meta"><span className={template.pro ? 'vip' : 'free'}>{template.pro ? <><Crown size={11} fill="currentColor" />VIP</> : '免费'}</span><p>{template.scenario}</p><small>{getTemplateInputLabel(template)}</small></div>
       <div className={`collage-preview ratio-${ratio.replace(':','-')}`}><TemplateArt template={template} spacing={spacing} radius={radius} photos={photos} showSlots={!photos.length} titleText={titleText} /></div>
