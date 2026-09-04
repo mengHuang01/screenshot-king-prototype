@@ -1955,3 +1955,65 @@ html[data-theme='dark'] .result-insights span,html[data-theme='dark'] .generic-s
   .home-screen .tool-card-visual,
   .home-screen .tool-card-visual .result-art { height:82px; }
 }
+
+/* Focus Frame compact home — keep one resumable project above the fold */
+.home-screen .topbar { margin-bottom:11px; }
+.top-sync-button { min-height:36px; padding:0 10px; font-size:11px; }
+.home-screen .hero-card { min-height:150px; padding:15px 17px; }
+.home-screen .hero-card .hero-copy { max-width:61%; }
+.home-screen .hero-kicker { margin-bottom:6px; font-size:9px; }
+.home-screen .hero-copy > strong { max-width:205px; font-size:18px; line-height:1.25; }
+.home-screen .hero-copy > small { margin-top:4px; font-size:9px; }
+.home-screen .hero-actions { gap:6px; margin-top:9px; }
+.home-screen .hero-actions button { min-height:36px; padding:0 10px; }
+.home-screen .hero-visual { right:10px; top:23px; width:112px; height:103px; }
+.home-screen .hero-detected { right:-1px; bottom:-4px; }
+.home-screen > .section-block { margin-top:18px; }
+.home-screen .section-title { margin-bottom:8px; }
+.home-screen .section-title h2 { font-size:19px; }
+.home-screen .tool-card { min-height:122px; padding:6px 6px 8px; }
+.home-screen .tool-card-visual,
+.home-screen .tool-card-visual .result-art { height:57px; }
+.home-screen .tool-card-copy { gap:7px; padding:7px 3px 3px; }
+.home-screen .tool-card-copy .tool-icon { width:27px; height:27px; border-radius:8px; }
+.home-screen .tool-card-copy .tool-icon svg { width:15px; height:15px; }
+.home-screen .tool-card-copy strong { font-size:12px; }
+.home-screen .tool-card-copy small { margin-top:1px; font-size:8px; }
+.home-screen .tool-card-scene { padding:0 3px; font-size:8px; }
+.home-continue-section { padding-bottom:4px; }
+.home-continue-card { display:grid; width:100%; min-height:76px; grid-template-columns:58px minmax(0,1fr) auto; align-items:center; gap:10px; border:.5px solid rgba(60,60,67,.14); border-radius:17px; padding:8px; color:#17181c; background:#fff; text-align:left; cursor:pointer; transition:transform .12s ease,background-color .12s ease; }
+.home-continue-card:active { transform:scale(.98); background:#f7f7f9; }
+.home-continue-card > .result-art { width:58px; height:58px; min-height:0; border-radius:11px; }
+.home-continue-card .result-art-icon { display:none; }
+.home-continue-card > span { min-width:0; }
+.home-continue-card strong,
+.home-continue-card small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.home-continue-card strong { font-size:13px; font-weight:650; }
+.home-continue-card small { margin-top:5px; color:#7b7b82; font-size:10px; }
+.home-continue-card > b { display:flex; min-height:36px; align-items:center; gap:1px; padding:0 4px; color:#0a84ff; font-size:11px; font-weight:650; }
+
+@media (max-width:739px) {
+  .home-screen .hero-card { min-height:150px; padding:15px 17px; }
+  .home-screen .hero-card .hero-copy { max-width:61%; }
+  .home-screen .hero-visual { right:10px; top:23px; width:112px; height:103px; }
+  .home-screen .tool-card { min-height:122px; padding:6px 6px 8px; }
+  .home-screen .tool-card-visual,
+  .home-screen .tool-card-visual .result-art { height:57px; }
+  .home-screen .tool-card-copy strong { font-size:12px; }
+  .home-screen .tool-card-copy small,
+  .home-screen .tool-card-scene { font-size:8px; }
+}
+
+@media (min-width:400px) and (max-width:739px) {
+  .home-screen .hero-card { min-height:152px; }
+  .home-screen .hero-visual { right:12px; top:22px; width:118px; height:108px; }
+  .home-screen .tool-card { height:120px; min-height:120px; }
+  .home-screen .tool-card-visual,
+  .home-screen .tool-card-visual .result-art { height:54px; }
+}
+
+@media (max-width:739px) {
+  .home-screen .tool-card { height:120px; min-height:120px; }
+  .home-screen .tool-card-visual,
+  .home-screen .tool-card-visual .result-art { height:54px; }
+}

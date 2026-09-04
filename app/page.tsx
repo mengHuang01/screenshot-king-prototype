@@ -223,7 +223,7 @@ function HomeScreen({ onNavigate, onOpenTool, notify }: { onNavigate: (tab: Tab)
       <header className="topbar">
         <h1>截屏王</h1>
         <div className="top-actions">
-          <button className="top-sync-button" aria-label="连接 Mac" onClick={() => notify('Mac 同步已打开')}><Monitor size={19} /><span>Mac</span></button>
+          <button className="top-sync-button" aria-label="打开 Mac 互传" onClick={() => notify('Mac 互传已打开')}><Monitor size={18} /><span>Mac 互传</span></button>
           <button className="icon-button" aria-label="设置" onClick={() => onNavigate('profile')}><Settings size={21} /></button>
         </div>
       </header>
@@ -254,6 +254,15 @@ function HomeScreen({ onNavigate, onOpenTool, notify }: { onNavigate: (tab: Tab)
             );
           })}
         </div>
+      </section>
+
+      <section className="section-block home-continue-section">
+        <div className="section-title"><h2>继续处理</h2><button onClick={() => onNavigate('profile')}>查看全部 <span>›</span></button></div>
+        <button className="home-continue-card" onClick={() => onOpenTool(recent[0].tool)}>
+          <ResultArtwork kind={recent[0].tool} />
+          <span><strong>{recent[0].name}</strong><small>图片转文字 · 今天 14:30</small></span>
+          <b>继续 <ChevronRight size={14} /></b>
+        </button>
       </section>
     </div>
   );
