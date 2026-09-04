@@ -251,7 +251,7 @@ function LongShotScreen({ notify }: { notify: (message: string) => void }) {
 
   if (stitched) {
     return (
-      <div className="screen-scroll app-screen">
+      <div className="screen-scroll app-screen longshot-screen">
         <ScreenHeader title="导出长图" back onBack={() => setStitched(false)} trailing={<span className="vip-pill"><Crown size={13} fill="currentColor" />VIP</span>} />
         <div className="result-status"><span><Check size={15} /></span><div><strong>拼接完成</strong><small>已自动消除重叠区域</small></div></div>
         <div className="long-result">{shots.map((shot) => <ShotPreview key={shot.id} shot={shot} tall />)}</div>
@@ -267,7 +267,7 @@ function LongShotScreen({ notify }: { notify: (message: string) => void }) {
   }
 
   return (
-    <div className="screen-scroll app-screen">
+    <div className="screen-scroll app-screen longshot-screen">
       <ScreenHeader title="长截图" subtitle="自动拼接，保持每一处清晰" trailing={<button className="icon-button" onClick={() => notify('长截图设置已打开')} aria-label="长截图设置"><Settings size={20} /></button>} />
       <div className="segmented-control">
         <button className={mode === 'image' ? 'active' : ''} onClick={() => setMode('image')}>添加截图</button>
@@ -299,7 +299,7 @@ function ToolsScreen({ onOpenTool }: { onOpenTool: (id: ToolId) => void }) {
   const [search, setSearch] = useState('');
   const matches = (label: string, hint: string) => `${label}${hint}`.toLowerCase().includes(search.trim().toLowerCase());
   return (
-    <div className="screen-scroll app-screen">
+    <div className="screen-scroll app-screen tools-screen">
       <ScreenHeader title="工具箱" subtitle="常用能力，一站完成" trailing={<span className="vip-pill"><Crown size={13} fill="currentColor" />VIP</span>} />
       <label className="search-field"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="搜索工具" aria-label="搜索工具" />{search ? <button onClick={() => setSearch('')}>清除</button> : null}</label>
       {toolGroups.map((group) => {
@@ -464,7 +464,7 @@ function TemplateArt({ template, spacing = 4, radius = 7 }: { template: (typeof 
 function TemplatesScreen({ onSelect }: { onSelect: (id: string) => void }) {
   const [filter, setFilter] = useState('热门');
   return (
-    <div className="screen-scroll app-screen">
+    <div className="screen-scroll app-screen templates-screen">
       <ScreenHeader title="模板中心" subtitle="选好版式，只需替换内容" trailing={<span className="vip-pill"><Crown size={13} fill="currentColor" />VIP</span>} />
       <div className="filter-pills">{['热门','教程','社交','反馈','证件照'].map((item) => <button key={item} className={filter === item ? 'active' : ''} onClick={() => setFilter(item)}>{item}</button>)}</div>
       <div className="section-title template-title"><h2>{filter}精选</h2><span className="section-count">持续更新</span></div>
@@ -480,7 +480,7 @@ function TemplateEditor({ id, onBack, notify }: { id: string; onBack: () => void
   const [radius, setRadius] = useState(9);
   const [saved, setSaved] = useState(false);
   return (
-    <div className="screen-scroll app-screen detail-screen">
+    <div className="screen-scroll app-screen detail-screen template-editor-screen">
       <ScreenHeader title={saved ? '预览与分享' : '拼图编辑'} back onBack={onBack} trailing={<button className="text-action" onClick={() => { setSaved(true); notify('拼图已生成'); }}>{saved ? '完成' : '保存'}</button>} />
       <div className={`collage-preview ratio-${ratio.replace(':','-')}`}><TemplateArt template={template} spacing={spacing} radius={radius} /></div>
       {saved ? <>
@@ -610,6 +610,18 @@ export default function HomePage() {
         <div className="phone-shell">
           <div className="phone-screen">
             <div className="statusbar"><strong>9:41</strong><span className="dynamic-island" /><span className="signal">● ●◔ ▰</span></div>
+            <aside className="tablet-sidebar" aria-label="iPad 主导航">
+              <div className="tablet-brand"><AppLogo /><span><strong>截屏王</strong><small>iPad 工作台</small></span></div>
+              <button className="tablet-create" onClick={() => navigate('longshot')}><Plus size={18} />新建长截图</button>
+              <nav>
+                {navItems.map((item) => {
+                  const Icon = item.icon;
+                  return <button key={item.id} className={activeTab === item.id ? 'active' : ''} onClick={() => navigate(item.id)}><Icon size={20} /><span>{item.label}</span>{activeTab === item.id ? <ChevronRight size={16} /> : null}</button>;
+                })}
+              </nav>
+              <div className="tablet-library"><span>资料库</span><button onClick={() => { navigate('home'); notify('已打开最近项目'); }}><History size={17} />最近项目</button><button onClick={() => { navigate('templates'); notify('已打开我的模板'); }}><LayoutGrid size={17} />我的模板</button></div>
+              <div className="tablet-theme"><span>外观</span><ThemeSwitcher theme={theme} onChange={setTheme} /></div>
+            </aside>
             <div className={`page-area ${showNav ? '' : 'full'}`}>{screen}</div>
             {showNav ? <nav className="bottom-nav" aria-label="主导航">{navItems.map((item) => { const Icon = item.icon; return <button key={item.id} className={activeTab === item.id ? 'active' : ''} onClick={() => navigate(item.id)}><Icon size={21} /><span>{item.label}</span></button>; })}</nav> : null}
             {toast ? <output className="toast" aria-live="polite"><Check size={15} />{toast}</output> : null}
