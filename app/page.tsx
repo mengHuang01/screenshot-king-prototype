@@ -1,9 +1,7 @@
 'use client';
 
 import {
-  ArrowDown,
   ArrowRight,
-  ArrowUp,
   BadgeCheck,
   BatteryMedium,
   Check,
@@ -16,6 +14,7 @@ import {
   FileScan,
   FileText,
   Grid2X2,
+  GripVertical,
   Highlighter,
   History,
   Home,
@@ -23,7 +22,6 @@ import {
   Images,
   LayoutGrid,
   LayoutTemplate,
-  Link2,
   LoaderCircle,
   LockKeyhole,
   Monitor,
@@ -206,6 +204,20 @@ function ScreenHeader({ title, subtitle, back, onBack, trailing, large = false }
   );
 }
 
+function EditorHeader({ title, onBack, onUndo, onRedo, onDone, canUndo, canRedo }: { title: string; onBack: () => void; onUndo: () => void; onRedo: () => void; onDone: () => void; canUndo: boolean; canRedo: boolean }) {
+  return (
+    <header className="editor-header">
+      <button className="icon-button back-button" aria-label="返回" onClick={onBack}><ChevronLeft size={27} /></button>
+      <h1>{title}</h1>
+      <div>
+        <button className="icon-button" disabled={!canUndo} aria-label="撤销" onClick={onUndo}><Undo2 size={19} /></button>
+        <button className="icon-button" disabled={!canRedo} aria-label="恢复" onClick={onRedo}><Redo2 size={19} /></button>
+        <button className="editor-done" onClick={onDone}>完成</button>
+      </div>
+    </header>
+  );
+}
+
 function HomeScreen({ onNavigate, onOpenTool, notify }: { onNavigate: (tab: Tab) => void; onOpenTool: (id: ToolId) => void; notify: (message: string) => void }) {
   const resumableProject = recent[0];
 
@@ -237,7 +249,6 @@ function HomeScreen({ onNavigate, onOpenTool, notify }: { onNavigate: (tab: Tab)
             <span className="home-feature-copy">
               <span className="home-feature-heading"><span><ShieldCheck size={18} /></span><strong>智能打码</strong></span>
               <small>一键隐藏聊天截图中的隐私</small>
-              <em>头像 · 昵称 · 手机号 · 二维码</em>
             </span>
             <span className="home-redact-comparison">
               <span className="home-compare-shot home-redact-before"><ResultArtwork kind="redact" /><small>处理前</small></span>
@@ -300,9 +311,13 @@ function LongShotScreen({ notify }: { notify: (message: string) => void }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [saved, setSaved] = useState(false);
   const [quality, setQuality] = useState('高清');
-  const [removeFixedBars, setRemoveFixedBars] = useState(true);
-  const [smartSeam, setSmartSeam] = useState(true);
+  const removeFixedBars = true;
+  const smartSeam = true;
+  const [draggedShotId, setDraggedShotId] = useState<number | null>(null);
+  const [revealedShotId, setRevealedShotId] = useState<number | null>(null);
   const stitchTimer = useRef<number | null>(null);
+  const holdTimer = useRef<number | null>(null);
+  const touchOrigin = useRef<{ id: number; x: number; y: number } | null>(null);
   const leaveResult = () => { setStitched(false); setSaved(false); };
   const resultBackGesture = useEdgeSwipeBack(leaveResult);
 
@@ -316,14 +331,56 @@ function LongShotScreen({ notify }: { notify: (message: string) => void }) {
     notify(`已导入 ${additions.length} 张图片`);
   };
 
-  const moveShot = (index: number, offset: -1 | 1) => {
+  const moveShotTo = (draggedId: number, targetId: number) => {
+    if (draggedId === targetId) return;
     setShots((current) => {
-      const destination = index + offset;
-      if (destination < 0 || destination >= current.length) return current;
+      const from = current.findIndex((item) => item.id === draggedId);
+      const to = current.findIndex((item) => item.id === targetId);
+      if (from < 0 || to < 0) return current;
       const reordered = [...current];
-      [reordered[index], reordered[destination]] = [reordered[destination], reordered[index]];
+      const [moved] = reordered.splice(from, 1);
+      reordered.splice(to, 0, moved);
       return reordered;
     });
+  };
+
+  const beginTouchSort = (shot: Shot, event: React.TouchEvent<HTMLDivElement>) => {
+    const touch = event.touches[0];
+    touchOrigin.current = { id: shot.id, x: touch.clientX, y: touch.clientY };
+    if (holdTimer.current) window.clearTimeout(holdTimer.current);
+    holdTimer.current = window.setTimeout(() => {
+      setDraggedShotId(shot.id);
+      setRevealedShotId(null);
+      notify('拖动截图调整顺序');
+    }, 380);
+  };
+
+  const updateTouchSort = (event: React.TouchEvent<HTMLDivElement>) => {
+    const origin = touchOrigin.current;
+    const touch = event.touches[0];
+    if (!origin || !touch) return;
+    if (draggedShotId) {
+      event.preventDefault();
+      const target = document.elementFromPoint(touch.clientX, touch.clientY)?.closest<HTMLElement>('[data-shot-id]');
+      const targetId = Number(target?.dataset.shotId);
+      if (targetId) moveShotTo(draggedShotId, targetId);
+      return;
+    }
+    if (Math.abs(touch.clientY - origin.y) > 12 && holdTimer.current) window.clearTimeout(holdTimer.current);
+  };
+
+  const finishTouchSort = (event: React.TouchEvent<HTMLDivElement>) => {
+    if (holdTimer.current) window.clearTimeout(holdTimer.current);
+    const origin = touchOrigin.current;
+    const touch = event.changedTouches[0];
+    if (origin && touch && !draggedShotId) {
+      const distance = touch.clientX - origin.x;
+      if (distance < -52) setRevealedShotId(origin.id);
+      if (distance > 36) setRevealedShotId(null);
+    }
+    touchOrigin.current = null;
+    if (draggedShotId) notify('截图顺序已更新');
+    setDraggedShotId(null);
   };
 
   const startStitching = () => {
@@ -339,14 +396,15 @@ function LongShotScreen({ notify }: { notify: (message: string) => void }) {
 
   useEffect(() => () => {
     if (stitchTimer.current) window.clearTimeout(stitchTimer.current);
+    if (holdTimer.current) window.clearTimeout(holdTimer.current);
   }, []);
 
   if (stitched) {
     return (
       <div className="screen-scroll app-screen longshot-screen result-workspace" {...resultBackGesture}>
         <ScreenHeader title="导出长图" back onBack={leaveResult} trailing={<span className="vip-pill"><Crown size={13} fill="currentColor" />VIP</span>} />
-        <div className={`result-status ${saved ? 'saved' : ''}`}><span><Check size={15} /></span><div><strong>{saved ? '已存入照片' : '拼接完成'}</strong><small>{saved ? '长图已保存在本机相册' : '5 处重叠与 2 个重复栏已清理'}</small></div></div>
         <div className="long-result">{shots.map((shot) => <ShotPreview key={shot.id} shot={shot} tall />)}</div>
+        <div className={`result-status ${saved ? 'saved' : ''}`}><span><Check size={15} /></span><div><strong>{saved ? '已存入照片' : '拼接完成'}</strong><small>{saved ? '长图已保存在本机相册' : '5 处重叠与 2 个重复栏已清理'}</small></div></div>
         <div className="result-insights"><span><strong>{shots.length}</strong><small>张截图</small></span><span><strong>{Math.max(0, shots.length - 1)}</strong><small>处重叠</small></span><span><strong>{removeFixedBars ? '38%' : '31%'}</strong><small>重复已移除</small></span></div>
         <div className="settings-card compact">
           <div className="settings-row"><span>导出尺寸</span><strong>1080px <ChevronRight size={15} /></strong></div>
@@ -367,36 +425,38 @@ function LongShotScreen({ notify }: { notify: (message: string) => void }) {
         <button className={mode === 'image' ? 'active' : ''} onClick={() => setMode('image')}>添加截图</button>
         <button className={mode === 'recording' ? 'active' : ''} onClick={() => setMode('recording')}>录屏转长图</button>
       </div>
-      <section className="longshot-story"><ResultArtwork kind="longshot" /><span><small>本机智能分析完成</small><strong>{shots.length} 张截图，会变成 1 张完整长图</strong><p>发现 {Math.max(0, shots.length - 1)} 处重叠与 2 个重复导航栏。</p></span></section>
-      <section className="analysis-card" aria-label="拼接分析结果">
-        <div className="analysis-score"><span>98</span><small>匹配度</small></div>
-        <div className="analysis-facts"><span><Check size={14} />顺序正确</span><span><Check size={14} />接缝连续</span><span><Check size={14} />预计减少 38%</span></div>
-        <div className="analysis-options">
-          <label aria-label="清理重复导航栏"><input type="checkbox" checked={removeFixedBars} onChange={(event) => setRemoveFixedBars(event.target.checked)} /><span><strong>清理重复导航栏</strong><small>检测到顶部与底部各 1 个</small></span><i /></label>
-          <label aria-label="智能选择接缝"><input type="checkbox" checked={smartSeam} onChange={(event) => setSmartSeam(event.target.checked)} /><span><strong>智能选择接缝</strong><small>避开文字、头像和按钮</small></span><i /></label>
-        </div>
-      </section>
+      <section className="longshot-status"><span><Check size={16} /></span><div><strong>{shots.length} 张截图已就绪</strong><small>顺序和重叠区域已自动识别，可直接调整</small></div></section>
       <div className="shot-toolbar">
         <div><strong>{mode === 'image' ? `${shots.length} 张截图` : '关键画面'}</strong></div>
         <span><button disabled={shots.length < 2} onClick={() => { setShots((current) => [...current].sort((left, right) => left.id - right.id)); notify('已按拍摄时间排序'); }}>自动排序</button><button className="shot-add-button" disabled={shots.length >= 8} onClick={() => setPickerOpen(true)}><ImagePlus size={16} />添加</button></span>
       </div>
-      <div className="shot-list">
+      <div className="shot-list longshot-main-list">
         {shots.map((shot, index) => (
-          <div className="shot-row" key={shot.id}>
-            <strong className="shot-index">{String(index + 1).padStart(2, '0')}</strong>
-            <ShotPreview shot={shot} />
-            <span className="shot-copy"><strong>{shot.name}</strong><small>{shot.meta}</small></span>
-            <span className="overlap-badge">{index ? `匹配 ${99 - index}%` : '起始'}</span>
-            <span className="shot-order-actions">
-              <button disabled={!index} aria-label={`上移 ${shot.name}`} onClick={() => moveShot(index, -1)}><ArrowUp size={15} /></button>
-              <button disabled={index === shots.length - 1} aria-label={`下移 ${shot.name}`} onClick={() => moveShot(index, 1)}><ArrowDown size={15} /></button>
-              <button className="delete" aria-label={`删除 ${shot.name}`} onClick={() => { setShots((current) => current.filter((item) => item.id !== shot.id)); notify(`已移除 ${shot.name}`); }}><Trash2 size={15} /></button>
-            </span>
+          <div className={`shot-swipe-shell ${revealedShotId === shot.id ? 'revealed' : ''}`} data-shot-id={shot.id} key={shot.id}>
+            <button className="shot-swipe-delete" aria-label={`删除 ${shot.name}`} onClick={() => { setShots((current) => current.filter((item) => item.id !== shot.id)); setRevealedShotId(null); notify(`已移除 ${shot.name}`); }}><Trash2 size={17} />删除</button>
+            <div
+              className={`shot-row ${draggedShotId === shot.id ? 'dragging' : ''}`}
+              draggable
+              onDragStart={() => { setDraggedShotId(shot.id); setRevealedShotId(null); }}
+              onDragEnter={() => { if (draggedShotId) moveShotTo(draggedShotId, shot.id); }}
+              onDragOver={(event) => event.preventDefault()}
+              onDragEnd={() => { setDraggedShotId(null); notify('截图顺序已更新'); }}
+              onTouchStart={(event) => beginTouchSort(shot, event)}
+              onTouchMove={updateTouchSort}
+              onTouchEnd={finishTouchSort}
+              onTouchCancel={finishTouchSort}
+            >
+              <GripVertical className="shot-drag-handle" size={18} aria-hidden="true" />
+              <strong className="shot-index">{String(index + 1).padStart(2, '0')}</strong>
+              <ShotPreview shot={shot} />
+              <span className="shot-copy"><strong>{shot.name}</strong><small>{index ? `与上一张重叠 ${99 - index}%` : '长按拖动排序 · 左滑删除'}</small></span>
+              <ChevronRight size={17} />
+            </div>
           </div>
         ))}
         {!shots.length ? <button className="empty-drop" onClick={() => setPickerOpen(true)}><ImagePlus size={28} /><strong>选择截图</strong><small>最多添加 8 张</small></button> : null}
       </div>
-      <button className="primary-button" disabled={shots.length < 2 || isStitching} onClick={startStitching}>{isStitching ? <LoaderCircle className="spinner" size={18} /> : <Sparkles size={18} />} {isStitching ? '正在计算顺序与接缝…' : `智能拼接 ${shots.length} 张截图`}</button>
+      <button className="primary-button sticky-primary" disabled={shots.length < 2 || isStitching} onClick={startStitching}>{isStitching ? <LoaderCircle className="spinner" size={18} /> : <Sparkles size={18} />} {isStitching ? '正在生成预览…' : '预览拼接结果'}</button>
       <PhotoPicker open={pickerOpen} onOpenChange={setPickerOpen} onPick={addPhotos} max={Math.max(1, 8 - shots.length)} />
     </div>
   );
@@ -440,10 +500,11 @@ function ImageInput({ onSelect, selectedName, label = '选择照片' }: { onSele
   );
 }
 
-function RedactTool({ notify }: { notify: (message: string) => void }) {
+function RedactTool({ notify, onBack }: { notify: (message: string) => void; onBack: () => void }) {
   const [method, setMethod] = useState('模糊');
   const [strength, setStrength] = useState(62);
   const [completed, setCompleted] = useState(false);
+  const [redoAvailable, setRedoAvailable] = useState(false);
   const [photo, setPhoto] = useState<PickedPhoto | null>(null);
   const [enabledKinds, setEnabledKinds] = useState(['头像', '昵称', '手机号', '地址', '二维码']);
   const privacyKinds = [
@@ -457,29 +518,43 @@ function RedactTool({ notify }: { notify: (message: string) => void }) {
   const toggleKind = (label: string) => {
     setEnabledKinds((current) => current.includes(label) ? current.filter((item) => item !== label) : [...current, label]);
     setCompleted(false);
+    setRedoAvailable(false);
   };
   return (
-    <>
-      <div className={`detection-banner ${completed ? 'is-complete' : ''}`}><ShieldCheck size={17} /><strong>{!photo ? '选择图片后自动检查隐私' : completed ? `${selectedCount} 处隐私已安全处理` : `发现 5 类、共 9 处隐私`}</strong>{photo ? <button onClick={() => setCompleted(false)}>重新检查</button> : null}</div>
-      <div className={`chat-preview ${photo ? `photo-tone-${photo.tone}` : ''}`} style={photo?.url ? { backgroundImage: `linear-gradient(rgba(244,248,252,.82),rgba(244,248,252,.82)),url(${photo.url})` } : undefined}>
-        {photo ? <span className="source-chip"><Images size={13} />{photo.name}</span> : null}
-        <div className="chat-bubble left"><span className="avatar-mask" style={{ filter: method === '模糊' ? `blur(${strength / 12}px)` : undefined }} />周末一起去露营吧，地点我发你～</div>
-        <div className="chat-bubble right">好呀，发我位置和联系方式吧</div>
-        <div className="chat-bubble left">手机号：<b className={`redact-mark ${method}`}>138 8888 8888</b></div>
-        <div className="location-card"><strong>大雁湖露营地</strong><small>广东省深圳市龙岗区大雁湖公园</small><span>◎</span></div>
-        <div className={`qr-demo redact-mark ${method}`}><QrCode size={48} /></div>
+    <div className="redact-editor-flow">
+      <EditorHeader
+        title="智能打码"
+        onBack={onBack}
+        canUndo={completed}
+        canRedo={redoAvailable}
+        onUndo={() => { setCompleted(false); setRedoAvailable(true); notify('已撤销打码'); }}
+        onRedo={() => { setCompleted(true); setRedoAvailable(false); notify('已恢复打码'); }}
+        onDone={() => { if (!photo) notify('请先选择图片'); else { setCompleted(true); setRedoAvailable(false); notify(`${selectedCount} 处隐私已处理`); } }}
+      />
+      <ImageInput selectedName={photo?.name} label={photo ? '更换图片' : '选择图片'} onSelect={(selectedPhoto) => { setPhoto(selectedPhoto); setCompleted(false); setRedoAvailable(false); notify('已识别头像、手机号与二维码'); }} />
+      {!photo ? <div className="editor-empty-state redact-empty"><span><ImagePlus size={28} /></span><strong>选择聊天截图开始</strong><small>隐私区域会直接标在图片上</small><button onClick={() => { setPhoto(demoShots[1]); notify('已载入示例截图'); }}>查看示例</button></div> : (
+        <div className={`chat-preview redact-canvas ${photo.tone} ${completed ? 'is-complete' : ''}`} style={photo.url ? { backgroundImage: `linear-gradient(rgba(244,248,252,.82),rgba(244,248,252,.82)),url(${photo.url})` } : undefined}>
+          <span className={`detection-count ${completed ? 'complete' : ''}`}><ShieldCheck size={14} />{completed ? `已处理 ${selectedCount} 处` : `已识别 ${selectedCount} 处`}</span>
+          <div className="chat-bubble left"><span className="avatar-mask" style={{ filter: method === '模糊' ? `blur(${strength / 12}px)` : undefined }} />周末一起去露营吧，地点我发你～</div>
+          <div className="chat-bubble right">好呀，发我位置和联系方式吧</div>
+          <div className="chat-bubble left">手机号：<b className={`redact-mark ${method}`}>138 8888 8888</b></div>
+          <div className="location-card"><strong>大雁湖露营地</strong><small>广东省深圳市龙岗区大雁湖公园</small><span>◎</span></div>
+          <div className={`qr-demo redact-mark ${method}`}><QrCode size={48} /></div>
+          {enabledKinds.includes('头像') ? <i className="privacy-box privacy-avatar">头像</i> : null}
+          {enabledKinds.includes('昵称') ? <i className="privacy-box privacy-name">昵称</i> : null}
+          {enabledKinds.includes('手机号') ? <i className="privacy-box privacy-phone">手机号</i> : null}
+          {enabledKinds.includes('地址') ? <i className="privacy-box privacy-address">地址</i> : null}
+          {enabledKinds.includes('二维码') ? <i className="privacy-box privacy-qr">二维码</i> : null}
+        </div>
+      )}
+      <div className="redact-bottom-panel editor-bottom-panel">
+        <div className="panel-heading"><strong>隐私类型</strong><small>已选 {selectedCount} 处</small></div>
+        <div className="privacy-kind-chips">{privacyKinds.map((item) => <button key={item.label} className={enabledKinds.includes(item.label) ? 'active' : ''} onClick={() => toggleKind(item.label)}><span>{item.label}</span><small>{item.count}</small></button>)}</div>
+        <div className="method-tabs">{['模糊','马赛克','涂抹','色块'].map((item) => <button key={item} className={method === item ? 'active' : ''} onClick={() => { setMethod(item); setCompleted(false); setRedoAvailable(false); }}>{item}</button>)}</div>
+        <label className="range-row"><span>强度</span><input type="range" min="20" max="100" value={strength} onChange={(event) => { setStrength(Number(event.target.value)); setCompleted(false); setRedoAvailable(false); }} /><strong>{strength}%</strong></label>
       </div>
-      <ImageInput selectedName={photo?.name} label={photo ? '更换图片' : '选择图片'} onSelect={(selectedPhoto) => { setPhoto(selectedPhoto); setCompleted(false); notify('已识别头像、手机号与二维码'); }} />
-      {photo ? <div className="privacy-detections" aria-label="选择要隐藏的隐私类型">
-        <div><strong>选择需要隐藏的内容</strong><small>已选 {selectedCount} 处</small></div>
-        <div>{privacyKinds.map((item) => <label key={item.label}><input type="checkbox" checked={enabledKinds.includes(item.label)} onChange={() => toggleKind(item.label)} /><span><b>{item.label}</b><small>{item.count} 处</small></span><i><Check size={12} /></i></label>)}</div>
-      </div> : null}
-      <div className="editor-panel">
-        <div className="method-tabs">{['模糊','马赛克','涂抹','色块'].map((item) => <button key={item} className={method === item ? 'active' : ''} onClick={() => setMethod(item)}>{item}</button>)}</div>
-        <label className="range-row"><span>强度</span><input type="range" min="20" max="100" value={strength} onChange={(event) => setStrength(Number(event.target.value))} /><strong>{strength}%</strong></label>
-        <button className="primary-button" disabled={!photo || !selectedCount} onClick={() => { setCompleted(true); notify(`${selectedCount} 处隐私内容已安全打码`); }}><ShieldCheck size={18} />隐藏选中的 {selectedCount || ''} 处内容</button>
-      </div>
-    </>
+      <button className={`primary-button sticky-primary ${completed ? 'completed' : ''}`} disabled={!photo || !selectedCount} onClick={() => { if (completed) notify('图片已保存到照片'); else { setCompleted(true); setRedoAvailable(false); notify(`${selectedCount} 处隐私内容已安全打码`); } }}>{completed ? <Download size={18} /> : <ShieldCheck size={18} />}{completed ? '保存图片' : `处理 ${selectedCount || ''} 处隐私`}</button>
+    </div>
   );
 }
 
@@ -488,49 +563,63 @@ const ocrCopy = `人工智能发展趋势报告\n2026 年度\n\n一、概述\n�
 function OcrTool({ notify }: { notify: (message: string) => void }) {
   const [mode, setMode] = useState<'single' | 'batch'>('single');
   const [result, setResult] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [resultView, setResultView] = useState<'image' | 'text'>('image');
   const [language, setLanguage] = useState('自动识别中英文');
   const [enhancement, setEnhancement] = useState('自动变清晰');
   const [photo, setPhoto] = useState<PickedPhoto | null>(null);
   const [batchPhotos, setBatchPhotos] = useState<PickedPhoto[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const processingTimer = useRef<number | null>(null);
   const sourceCount = mode === 'single' ? Number(Boolean(photo)) : batchPhotos.length;
-  const changeMode = (nextMode: 'single' | 'batch') => { setMode(nextMode); setResult(false); };
+  const changeMode = (nextMode: 'single' | 'batch') => { setMode(nextMode); setResult(false); setProcessing(false); setResultView('image'); };
   const previewStyle = mode === 'single' && photo?.url
-    ? { backgroundImage: `${result ? 'linear-gradient(rgba(255,255,255,.86), rgba(255,255,255,.86))' : 'linear-gradient(rgba(255,255,255,.16), rgba(255,255,255,.16))'}, url(${photo.url})` }
+    ? { backgroundImage: `linear-gradient(rgba(255,255,255,.2), rgba(255,255,255,.2)), url(${photo.url})` }
     : undefined;
+  const startScan = () => {
+    if (!sourceCount || processing) return;
+    setProcessing(true);
+    if (processingTimer.current) window.clearTimeout(processingTimer.current);
+    processingTimer.current = window.setTimeout(() => {
+      setProcessing(false);
+      setResult(true);
+      setResultView('image');
+      notify(mode === 'batch' ? `${sourceCount} 页文档已生成` : '文档已变清晰，文字也已提取');
+    }, 900);
+  };
+  useEffect(() => () => {
+    if (processingTimer.current) window.clearTimeout(processingTimer.current);
+  }, []);
   return (
-    <>
-      <section className="document-intro">
-        <span><FileScan size={21} /></span>
-        <div><strong>把文档照片变清晰</strong><small>自动拉正、去除阴影，还能复制里面的文字</small></div>
-      </section>
+    <div className="ocr-flow">
       <div className="segmented-control tool-segment"><button className={mode === 'single' ? 'active' : ''} onClick={() => changeMode('single')}>扫描一张</button><button className={mode === 'batch' ? 'active' : ''} onClick={() => changeMode('batch')}>扫描多页</button></div>
-      {mode === 'single' ? <ImageInput selectedName={photo?.name} label={photo ? '更换文档照片' : '选择文档照片'} onSelect={(selectedPhoto) => { setPhoto(selectedPhoto); setResult(false); notify('文档照片已加入'); }} /> : <>
+      {mode === 'single' ? <ImageInput selectedName={photo?.name} label={photo ? '更换文档照片' : '选择文档照片'} onSelect={(selectedPhoto) => { setPhoto(selectedPhoto); setResult(false); setProcessing(false); notify('文档照片已加入'); }} /> : <>
         <button className="mini-upload" onClick={() => setPickerOpen(true)}><ImagePlus size={17} /><span>{batchPhotos.length ? `已选择 ${batchPhotos.length} 页` : '选择多页文档照片'}</span><ChevronRight size={15} /></button>
-        <PhotoPicker open={pickerOpen} onOpenChange={setPickerOpen} onPick={(photos) => { setBatchPhotos(photos); setResult(false); notify(`已加入 ${photos.length} 页文档`); }} max={5} />
+        <PhotoPicker open={pickerOpen} onOpenChange={setPickerOpen} onPick={(photos) => { setBatchPhotos(photos); setResult(false); setProcessing(false); notify(`已加入 ${photos.length} 页文档`); }} max={5} />
       </>}
-      <div className={`document-preview ${!sourceCount ? 'is-empty' : result ? 'recognized' : 'is-pending'} ${mode === 'single' && photo ? `photo-tone-${photo.tone}` : ''}`} style={previewStyle}>
-        {sourceCount ? <FocusCorners className="document-focus" /> : null}
-        {sourceCount ? <span className="source-chip"><Images size={13} />{mode === 'single' ? photo?.name : `${batchPhotos.length} 页文档`}</span> : null}
-        {!sourceCount ? <div className="document-empty-state"><span><ImagePlus size={24} /></span><strong>先选择文档照片</strong><small>合同、票据、讲义和手写笔记都可以</small></div> : null}
-        {sourceCount && !result ? <div className="document-ready-state"><span><ScanText size={18} /></span><div><strong>文档已加入</strong><small>接下来会自动拉正并增强文字</small></div></div> : null}
-        {result ? ocrCopy.split('\n').map((line, index) => <p key={index} className={line.includes('、') || /^\d\./.test(line) ? 'doc-title' : ''}>{line || ' '}</p>) : null}
-        {result ? <><i className="scan-box b1" /><i className="scan-box b2" /><i className="scan-box b3" /></> : null}
-      </div>
-      {sourceCount ? <>
+      {!sourceCount ? <div className="editor-empty-state document-empty"><span><FileScan size={28} /></span><strong>选择文档照片开始</strong><small>自动拉正、去除阴影并提取文字</small><button onClick={() => { setPhoto(demoShots[0]); setMode('single'); notify('已载入示例文档'); }}>查看示例</button></div> : null}
+      {sourceCount && !result ? <div className={`document-preview document-source ${mode === 'single' && photo ? `photo-tone-${photo.tone}` : ''}`} style={previewStyle}><FocusCorners className="document-focus" /><span className="source-chip"><Images size={13} />{mode === 'single' ? photo?.name : `${batchPhotos.length} 页文档`}</span><div className="document-ready-state"><span><ScanText size={18} /></span><div><strong>{sourceCount} 页文档已加入</strong><small>确认效果后生成清晰文档</small></div></div></div> : null}
+      {sourceCount && !result ? <>
         <label className="select-row"><span>文字语言</span><select name="ocr-language" value={language} onChange={(event) => { setLanguage(event.target.value); setResult(false); }}><option>自动识别中英文</option><option>简体中文</option><option>English</option><option>日本語</option></select></label>
         <div className="scan-modes" aria-label="文档效果">{['自动变清晰','去除阴影','黑白扫描'].map((item) => <button key={item} className={enhancement === item ? 'active' : ''} onClick={() => { setEnhancement(item); setResult(false); }}>{item}</button>)}</div>
-        <div className={`scan-pipeline ${result ? 'complete' : ''}`}><span><Check size={13} />已找到文档</span><span><Check size={13} />已自动拉正</span><span><Check size={13} />{result ? '文字已提取' : '等待生成'}</span></div>
       </> : null}
-      {result ? <div className="ocr-actions"><button onClick={() => { void navigator.clipboard?.writeText(ocrCopy); notify('文档文字已复制'); }}><Copy size={17} />复制文字</button><button onClick={() => notify(`已保存 ${sourceCount} 份 PDF 文档`)}><FileText size={17} />保存 PDF</button><button onClick={() => notify('可编辑文本已导出')}><Download size={17} />导出文本</button></div> : <button className="primary-button" disabled={!sourceCount} onClick={() => { setResult(true); notify(mode === 'batch' ? `${sourceCount} 页文档已生成` : '清晰文档已生成，文字可以复制'); }}><ScanText size={18} /> {mode === 'batch' ? `生成 ${sourceCount || ''} 页清晰文档` : '生成清晰文档'}</button>}
-    </>
+      {processing ? <div className="scan-pipeline processing"><span><Check size={13} />找到文档</span><span><LoaderCircle className="spinner" size={13} />正在拉正</span><span>提取文字</span></div> : null}
+      {result ? <>
+        <div className="segmented-control ocr-result-tabs"><button className={resultView === 'image' ? 'active' : ''} onClick={() => setResultView('image')}>图片</button><button className={resultView === 'text' ? 'active' : ''} onClick={() => setResultView('text')}>文字</button></div>
+        {resultView === 'image' ? <div className={`document-preview recognized document-result-image ${mode === 'single' && photo ? `photo-tone-${photo.tone}` : ''}`} style={previewStyle}><FocusCorners className="document-focus" /><span className="source-chip"><Check size={13} />已拉正并增强</span><div className="document-page-lines"><strong>人工智能发展趋势报告</strong><i /><i /><i /><i /><i /><i /></div></div> : <div className="ocr-text-result">{ocrCopy.split('\n').map((line, index) => <p key={index} className={line.includes('、') || /^\d\./.test(line) ? 'doc-title' : ''}>{line || ' '}</p>)}</div>}
+        <div className="ocr-actions result-actions"><button onClick={() => { void navigator.clipboard?.writeText(ocrCopy); notify('文档文字已复制'); }}><Copy size={17} />复制文字</button><button onClick={() => notify(`已保存 ${sourceCount} 页 PDF`)}><FileText size={17} />保存 PDF</button><button onClick={() => notify('可编辑文本已存入文件')}><Download size={17} />导出文本</button></div>
+      </> : <button className="primary-button sticky-primary" disabled={!sourceCount || processing} onClick={startScan}>{processing ? <LoaderCircle className="spinner" size={18} /> : <ScanText size={18} />}{processing ? '正在处理文档…' : `生成${mode === 'batch' && sourceCount ? ` ${sourceCount} 页` : ''}清晰文档`}</button>}
+    </div>
   );
 }
 
 function CleanScreenshotTool({ notify }: { notify: (message: string) => void }) {
   const [photo, setPhoto] = useState<PickedPhoto | null>(null);
   const [cleaned, setCleaned] = useState(false);
+  const [divider, setDivider] = useState(52);
+  const [draggingDivider, setDraggingDivider] = useState(false);
   const [enabledItems, setEnabledItems] = useState(['状态栏', '底部指示条', '浮动按钮']);
+  const cleanCompareRef = useRef<HTMLDivElement | null>(null);
   const cleanupItems = [
     { label: '状态栏', hint: '时间、电量和网络信息' },
     { label: '底部指示条', hint: '自动补齐底部背景' },
@@ -540,22 +629,42 @@ function CleanScreenshotTool({ notify }: { notify: (message: string) => void }) 
     setEnabledItems((current) => current.includes(label) ? current.filter((item) => item !== label) : [...current, label]);
     setCleaned(false);
   };
+  const updateDivider = (clientX: number) => {
+    const rect = cleanCompareRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setDivider(Math.min(88, Math.max(12, ((clientX - rect.left) / rect.width) * 100)));
+  };
+  const cleanupArtwork = (after: boolean) => (
+    <span className={`clean-compare-layer ${after ? 'after' : 'before'} ${photo ? `photo-tone-${photo.tone}` : ''}`} style={photo?.url ? { backgroundImage:`linear-gradient(rgba(241,246,253,.72),rgba(241,246,253,.72)),url(${photo.url})` } : undefined}>
+      {!after || !enabledItems.includes('状态栏') ? <span className="clean-status"><b>9:41</b><i>•••</i></span> : null}
+      <span className="clean-content"><strong>订单已经提交</strong><span /><span /><span /><div><i /><b>预计明天送达</b></div></span>
+      {!after || !enabledItems.includes('浮动按钮') ? <span className="clean-floating"><Sparkles size={15} /></span> : null}
+      {!after || !enabledItems.includes('底部指示条') ? <span className="clean-home" /> : null}
+    </span>
+  );
   return (
     <div className="smart-tool-flow clean-tool-flow">
-      <div className={`clean-stage ${cleaned ? 'is-clean' : ''} ${photo ? `photo-tone-${photo.tone}` : ''}`} style={photo?.url ? { backgroundImage:`linear-gradient(rgba(241,246,253,.78),rgba(241,246,253,.78)),url(${photo.url})` } : undefined}>
-        <FocusCorners className="clean-focus" />
-        <span className="clean-status"><b>9:41</b><i>•••</i></span>
-        <div className="clean-content"><strong>订单已经提交</strong><span /><span /><span /><div><i /><b>预计明天送达</b></div></div>
-        <span className="clean-floating"><Sparkles size={15} /></span>
-        <span className="clean-home" />
-        {cleaned ? <span className="generated-badge"><Check size={14} />已清理 {enabledItems.length} 项</span> : null}
-      </div>
       <ImageInput selectedName={photo?.name} label="选择需要净化的截图" onSelect={(selectedPhoto) => { setPhoto(selectedPhoto); setCleaned(false); notify('已发现状态栏、底部指示条和浮动按钮'); }} />
-      {photo ? <div className="cleanup-summary"><span><Sparkles size={17} /></span><div><strong>发现 3 项可清理内容</strong><small>清理区域已避开正文和重要按钮</small></div><b>可撤销</b></div> : null}
-      <div className="cleanup-options" aria-label="选择需要清理的内容">
+      {!photo ? <div className="editor-empty-state clean-empty"><span><Sparkles size={28} /></span><strong>选择截图开始净化</strong><small>可直接比较清理前后的效果</small><button onClick={() => { setPhoto(demoShots[3]); notify('已载入示例截图'); }}>查看示例</button></div> : <div
+        ref={cleanCompareRef}
+        className={`clean-compare-stage ${cleaned ? 'is-clean' : ''} ${draggingDivider ? 'is-dragging' : ''}`}
+        onPointerDown={(event) => { setDraggingDivider(true); event.currentTarget.setPointerCapture(event.pointerId); updateDivider(event.clientX); }}
+        onPointerMove={(event) => { if (draggingDivider) updateDivider(event.clientX); }}
+        onPointerUp={(event) => { setDraggingDivider(false); event.currentTarget.releasePointerCapture(event.pointerId); }}
+        onPointerCancel={() => setDraggingDivider(false)}
+      >
+        {cleanupArtwork(false)}
+        <span className="clean-after-clip" style={{ clipPath:`inset(0 0 0 ${divider}%)` }}>{cleanupArtwork(true)}</span>
+        <span className="clean-compare-divider" style={{ left:`${divider}%` }}><i /><b>↔</b></span>
+        <span className="clean-compare-label before">处理前</span><span className="clean-compare-label after">处理后</span>
+        {cleaned ? <span className="generated-badge"><Check size={14} />已清理 {enabledItems.length} 项</span> : null}
+      </div>}
+      {photo ? <div className="cleanup-summary"><span><Sparkles size={17} /></span><div><strong>发现 3 项可清理内容</strong><small>拖动画面中的分割线比较效果</small></div></div> : null}
+      <div className="cleanup-options compact" aria-label="选择需要清理的内容">
         {cleanupItems.map((item) => <label key={item.label}><input type="checkbox" checked={enabledItems.includes(item.label)} onChange={() => toggleItem(item.label)} /><span><strong>{item.label}</strong><small>{item.hint}</small></span><i><Check size={12} /></i></label>)}
       </div>
-      <button className={`primary-button ${cleaned ? 'completed' : ''}`} disabled={!photo || !enabledItems.length} onClick={() => { if (cleaned) notify('清爽截图已保存到照片'); else { setCleaned(true); notify(`${enabledItems.length} 项界面元素已清理`); } }}>{cleaned ? <Download size={18} /> : <Sparkles size={18} />}{cleaned ? '保存清爽截图' : `预览清理效果 · ${enabledItems.length} 项`}</button>
+      {photo ? <button className="manual-repair" onClick={() => notify('已进入手动修复模式')}><SquarePen size={16} /><span><strong>自动效果不好？手动修复</strong><small>涂抹或恢复局部区域</small></span><ChevronRight size={16} /></button> : null}
+      <button className={`primary-button sticky-primary ${cleaned ? 'completed' : ''}`} disabled={!photo || !enabledItems.length} onClick={() => { if (cleaned) notify('清爽截图已保存到照片'); else { setCleaned(true); notify(`${enabledItems.length} 项界面元素已清理`); } }}>{cleaned ? <Download size={18} /> : <Sparkles size={18} />}{cleaned ? '保存清爽截图' : `应用净化效果 · ${enabledItems.length} 项`}</button>
     </div>
   );
 }
@@ -593,9 +702,10 @@ function CompareTool({ notify }: { notify: (message: string) => void }) {
   );
 }
 
-function AnnotateTool({ notify }: { notify: (message: string) => void }) {
+function AnnotateTool({ notify, onBack }: { notify: (message: string) => void; onBack: () => void }) {
   const [mode, setMode] = useState('箭头');
   const [color, setColor] = useState('#ff3b30');
+  const [cropRatio, setCropRatio] = useState('自由');
   const [photo, setPhoto] = useState<PickedPhoto | null>(null);
   const [history, setHistory] = useState<string[]>([]);
   const [redoHistory, setRedoHistory] = useState<string[]>([]);
@@ -624,29 +734,29 @@ function AnnotateTool({ notify }: { notify: (message: string) => void }) {
     setSaved(false);
   };
   return (
-    <>
-      <div className={`annotation-canvas ${photo ? `photo-tone-${photo.tone}` : ''}`} style={photo?.url ? { backgroundImage: `url(${photo.url})` } : undefined}>
-        {!photo ? <div className="mock-list">{recent.map((item, index) => <div key={item.name}><ShotPreview shot={demoShots[index]} /><span><strong>{item.name}</strong><small>{item.meta}</small></span></div>)}</div> : <span className="canvas-photo-label">{photo.name}</span>}
+    <div className="annotation-editor-flow">
+      <EditorHeader title="图片标注" onBack={onBack} onUndo={undo} onRedo={redo} canUndo={Boolean(history.length)} canRedo={Boolean(redoHistory.length)} onDone={() => { if (!photo) notify('请先选择图片'); else { setSaved(true); notify('标注已完成'); } }} />
+      <ImageInput selectedName={photo?.name} label={photo ? '更换图片' : '选择图片'} onSelect={(selectedPhoto) => { setPhoto(selectedPhoto); setHistory([]); setRedoHistory([]); setSaved(false); notify('图片已导入编辑器'); }} />
+      {!photo ? <div className="editor-empty-state annotation-empty"><span><SquarePen size={28} /></span><strong>选择图片开始标注</strong><small>支持箭头、文字、编号、高亮和裁剪</small><button onClick={() => { setPhoto(demoShots[0]); notify('已载入示例图片'); }}>查看示例</button></div> : <div className={`annotation-canvas editor-canvas ${photo.tone}`} style={photo.url ? { backgroundImage: `url(${photo.url})` } : undefined}>
+        <span className="canvas-photo-label">{photo.name}</span>
         {mode === '箭头' ? <span className="annotation-arrow" style={{ color }}>↗</span> : null}
         {mode === '编号' ? <span className="annotation-number" style={{ background: color }}>1</span> : null}
         {mode === '高亮' ? <span className="annotation-highlight" style={{ background: color }} /> : null}
         {mode === '文字' ? <span className="annotation-text" style={{ color }}>重点信息</span> : null}
         {mode === '裁剪' ? <span className="crop-guide"><i /><i /><i /><i /></span> : null}
         {saved ? <span className="generated-badge"><Check size={14} />已保存</span> : null}
-      </div>
-      <ImageInput selectedName={photo?.name} label={photo ? '更换图片' : '选择图片'} onSelect={(selectedPhoto) => { setPhoto(selectedPhoto); setHistory([]); setRedoHistory([]); setSaved(false); notify('图片已导入编辑器'); }} />
-      <div className="editor-panel">
-        <div className="edit-history" aria-label="编辑历史"><span>编辑操作</span><div><button disabled={!history.length} onClick={undo} aria-label="撤销"><Undo2 size={17} />撤销</button><button disabled={!redoHistory.length} onClick={redo} aria-label="重做"><Redo2 size={17} />重做</button></div></div>
+      </div>}
+      <div className="editor-panel annotation-bottom-panel editor-bottom-panel">
         <div className="annotation-tools">
           {[['箭头', ArrowRight], ['文字', TextCursorInput], ['编号', BadgeCheck], ['高亮', Highlighter], ['裁剪', Crop]].map(([label, ToolIcon]) => {
             const Icon = ToolIcon as LucideIcon;
             return <button key={label as string} className={mode === label ? 'active' : ''} onClick={() => chooseMode(label as string)}><Icon size={19} /><span>{label as string}</span></button>;
           })}
         </div>
-        <div className="color-row">{['#ff3b30','#ff9500','#ffcc00','#16c779','#1765fa','#8b5cf6','#111827'].map((item) => <button aria-label={`选择颜色 ${item}`} key={item} className={color === item ? 'active' : ''} style={{ background:item }} onClick={() => { setColor(item); setSaved(false); }} />)}</div>
-        <button className={`primary-button ${saved ? 'completed' : ''}`} disabled={!photo} onClick={() => { setSaved(true); notify('标注图片已保存到照片'); }}><Download size={18} /> {saved ? '已保存到照片' : '保存图片'}</button>
+        {mode === '裁剪' ? <div className="crop-parameters"><div>{['自由','1:1','4:3','16:9'].map((item) => <button key={item} className={cropRatio === item ? 'active' : ''} onClick={() => { setCropRatio(item); setSaved(false); }}>{item}</button>)}</div><button onClick={() => { setSaved(false); notify('图片已旋转 90°'); }}><Redo2 size={17} />旋转</button></div> : <div className="color-row">{['#ff3b30','#ff9500','#ffcc00','#16c779','#1765fa','#8b5cf6','#111827'].map((item) => <button aria-label={`选择颜色 ${item}`} key={item} className={color === item ? 'active' : ''} style={{ background:item }} onClick={() => { setColor(item); setSaved(false); }} />)}</div>}
       </div>
-    </>
+      <button className={`primary-button sticky-primary ${saved ? 'completed' : ''}`} disabled={!photo} onClick={() => { setSaved(true); notify('标注图片已保存到照片'); }}><Download size={18} /> {saved ? '已保存到照片' : '保存图片'}</button>
+    </div>
   );
 }
 
@@ -721,10 +831,11 @@ function ExportCenterTool({ notify, onUpgrade, subscribed }: { notify: (message:
 function ToolDetail({ id, onBack, notify, onUpgrade, subscribed }: { id: ToolId; onBack: () => void; notify: (message: string) => void; onUpgrade: () => void; subscribed: boolean }) {
   const titles: Record<ToolId, string> = { redact:'智能打码', ocr:'文档扫描', clean:'截图净化', annotate:'图片标注', compare:'图片对比', idphoto:'证件照', qrcode:'二维码工具', export:'导出中心' };
   const backGesture = useEdgeSwipeBack(onBack);
+  const ownsEditorHeader = id === 'redact' || id === 'annotate';
   return (
     <div className={`screen-scroll app-screen detail-screen detail-${id} editing-workspace tool-workspace`} {...backGesture}>
-      <ScreenHeader title={titles[id]} back onBack={onBack} trailing={<button className="icon-button" onClick={() => notify('工具设置已打开')} aria-label="工具设置"><Settings size={20} /></button>} />
-      {id === 'redact' ? <RedactTool notify={notify} /> : id === 'ocr' ? <OcrTool notify={notify} /> : id === 'clean' ? <CleanScreenshotTool notify={notify} /> : id === 'annotate' ? <AnnotateTool notify={notify} /> : id === 'compare' ? <CompareTool notify={notify} /> : id === 'idphoto' ? <IdPhotoTool notify={notify} /> : id === 'qrcode' ? <QrCodeTool notify={notify} /> : <ExportCenterTool notify={notify} onUpgrade={onUpgrade} subscribed={subscribed} />}
+      {!ownsEditorHeader ? <ScreenHeader title={titles[id]} back onBack={onBack} trailing={<button className="icon-button" onClick={() => notify('工具设置已打开')} aria-label="工具设置"><Settings size={20} /></button>} /> : null}
+      {id === 'redact' ? <RedactTool notify={notify} onBack={onBack} /> : id === 'ocr' ? <OcrTool notify={notify} /> : id === 'clean' ? <CleanScreenshotTool notify={notify} /> : id === 'annotate' ? <AnnotateTool notify={notify} onBack={onBack} /> : id === 'compare' ? <CompareTool notify={notify} /> : id === 'idphoto' ? <IdPhotoTool notify={notify} /> : id === 'qrcode' ? <QrCodeTool notify={notify} /> : <ExportCenterTool notify={notify} onUpgrade={onUpgrade} subscribed={subscribed} />}
     </div>
   );
 }
@@ -840,7 +951,7 @@ function TemplateEditor({ id, onBack, notify, onUpgrade, subscribed }: { id: str
       <div className="template-editor-meta"><span className={template.pro ? 'vip' : 'free'}>{template.pro ? <><Crown size={11} fill="currentColor" />VIP</> : '免费'}</span><p>{template.scenario}</p><small>{getTemplateInputLabel(template)}</small></div>
       <div className={`collage-preview ratio-${ratio.replace(':','-')}`}><TemplateArt template={template} spacing={spacing} radius={radius} photos={photos} showSlots={!photos.length} titleText={titleText} /></div>
       {saved ? <>
-        <div className={`share-panel ${requiresUpgrade ? 'vip-export-panel' : ''}`}><h3>{requiresUpgrade ? '解锁高清成品' : '成品已生成'}</h3><p>{requiresUpgrade ? `${template.value} · 无水印导出` : isNineSlice ? '已输出 9 张连续切图' : isRepeatPhoto ? '六寸相纸冲印版' : `${photos.length} 张照片 · ${ratio}`}</p>{requiresUpgrade ? <div className="vip-preview-benefits"><span><Check size={14} />高清无水印</span><span><Check size={14} />保存与分享</span></div> : <div><button onClick={() => notify('已复制图片')}><Copy size={19} />复制</button><button onClick={() => notify('系统分享面板已打开')}><Share2 size={19} />分享</button><button onClick={() => notify('分享链接已复制')}><Link2 size={19} />复制链接</button><button onClick={() => { setExported(true); notify('图片已保存到照片'); }}><Download size={19} />存入照片</button></div>}</div>
+        <div className={`share-panel ${requiresUpgrade ? 'vip-export-panel' : ''}`}><h3>{requiresUpgrade ? '解锁高清成品' : '成品已生成'}</h3><p>{requiresUpgrade ? `${template.value} · 无水印导出` : isNineSlice ? '已输出 9 张连续切图' : isRepeatPhoto ? '六寸相纸冲印版' : `${photos.length} 张照片 · ${ratio}`}</p>{requiresUpgrade ? <div className="vip-preview-benefits"><span><Check size={14} />高清无水印</span><span><Check size={14} />保存与分享</span></div> : <div><button onClick={() => notify('已复制图片')}><Copy size={19} />复制</button><button onClick={() => notify('系统分享面板已打开')}><Share2 size={19} />分享</button><button onClick={() => notify('图片已存入“文件”')}><FileText size={19} />存入文件</button><button onClick={() => { setExported(true); notify('图片已保存到照片'); }}><Download size={19} />存入照片</button></div>}</div>
         <div className="template-result-actions"><button className="secondary-button" onClick={() => { setSaved(false); setExported(false); }}>返回编辑</button><button className={`primary-button ${exported ? 'completed' : ''} ${requiresUpgrade ? 'vip-save' : ''}`} onClick={() => { if (requiresUpgrade) onUpgrade(); else { setExported(true); notify(exported ? '图片已经保存' : '图片已保存到照片'); } }}>{requiresUpgrade ? <Crown size={18} fill="currentColor" /> : <Download size={18} />}{requiresUpgrade ? '开通 VIP 并保存' : exported ? '已保存到照片' : '保存图片'}</button></div>
       </> : <div className="editor-panel collage-controls">
         {template.titleLabel ? <label className="generic-input template-title-input"><span>{template.titleLabel}</span><input name={`template-${template.id}-title`} autoComplete="off" value={titleText} placeholder={`输入${template.titleLabel}…`} onChange={(event) => { setTitleText(event.target.value); setSaved(false); setExported(false); }} /></label> : null}
@@ -866,15 +977,16 @@ function PurchaseScreen({ onBack, notify, subscribed, onSubscribe }: { onBack: (
       <ScreenHeader title="VIP 会员" back onBack={onBack} trailing={subscribed ? <button className="text-action" onClick={onBack}>完成</button> : null} />
       <section className={`purchase-hero ${subscribed ? 'active' : ''}`}>
         <span className="purchase-crown">{subscribed ? <Check size={31} strokeWidth={2.7} /> : <Crown size={31} fill="currentColor" />}</span>
-        <h1>{subscribed ? 'VIP 已开通' : '把常用工作一次做完'}</h1>
-        <p>{subscribed ? '全部高级功能现已可用' : '解锁高频工具和实用模板，先预览效果再决定'}</p>
+        <h1>{subscribed ? 'VIP 已开通' : '解锁更多本机处理能力'}</h1>
+        <p>{subscribed ? '当前 iOS 高级功能现已可用' : '先预览高级结果，再决定是否开通'}</p>
       </section>
       <div className="purchase-showcase" aria-label="VIP 成品示例"><ResultArtwork kind="longshot" /><ResultArtwork kind="ninegrid" /><ResultArtwork kind="idphoto" /></div>
       <section className="purchase-benefit-list" aria-label="VIP 权益">
-        <div><span><PanelsTopLeft size={19} /></span><p><strong>无限智能长截图</strong><small>不限张数，自动清理重复导航栏</small></p><Check size={17} /></div>
-        <div><span><ShieldCheck size={19} /></span><p><strong>批量隐私保护</strong><small>整组图片自动检查并隐藏敏感内容</small></p><Check size={17} /></div>
-        <div><span><ScanText size={19} /></span><p><strong>文档扫描与导出</strong><small>批量生成清晰文档，并导出可搜索 PDF</small></p><Check size={17} /></div>
-        <div><span><LayoutTemplate size={19} /></span><p><strong>全部智能模板</strong><small>自动教程、验收报告和商品长图</small></p><Check size={17} /></div>
+        <div><span><PanelsTopLeft size={19} /></span><p><strong>高级长截图</strong><small>处理更多截图，自动清理重复栏并超清导出</small></p><Check size={17} /></div>
+        <div><span><ShieldCheck size={19} /></span><p><strong>批量隐私处理</strong><small>一次检查多张截图中的头像、号码和二维码</small></p><Check size={17} /></div>
+        <div><span><ScanText size={19} /></span><p><strong>多页 OCR 与 PDF</strong><small>多页扫描、提取文字并保存为 PDF</small></p><Check size={17} /></div>
+        <div><span><Download size={19} /></span><p><strong>超清无水印导出</strong><small>保存高清 PNG、JPG、WebP 和模板成品</small></p><Check size={17} /></div>
+        <div><span><LayoutTemplate size={19} /></span><p><strong>专业模板</strong><small>解锁九宫格切图、教程和证件照冲印</small></p><Check size={17} /></div>
       </section>
       {!subscribed ? <>
         <div className="purchase-plans" aria-label="选择会员套餐">
@@ -888,6 +1000,7 @@ function PurchaseScreen({ onBack, notify, subscribed, onSubscribe }: { onBack: (
         <button className="primary-button completed purchase-button" onClick={onBack}><Check size={18} />开始使用</button>
         <button className="restore-purchase" onClick={() => notify('会员管理已打开')}>管理订阅</button>
       </>}
+      <div className="purchase-links"><button onClick={() => notify('服务协议已打开')}>服务协议</button><span>·</span><button onClick={() => notify('隐私政策已打开')}>隐私政策</button></div>
     </div>
   );
 }
@@ -904,16 +1017,9 @@ function ProfileScreen({ notify, onOpenTool, theme, onThemeChange, subscribed, o
   return (
     <div className="screen-scroll app-screen profile-screen">
       <ScreenHeader large title="我的" trailing={<button className="icon-button" onClick={openPreferences} aria-label="打开偏好设置"><Settings size={20} /></button>} />
-      <section className="profile-card profile-identity">
-        <div className="profile-avatar"><UserRound size={31} /></div>
-        <span><strong>截屏小能手</strong><small>ID: 12345678</small></span>
-        {subscribed ? <em><Crown size={12} fill="currentColor" />VIP</em> : null}
-        <button onClick={() => notify('个人资料可编辑')}>编辑</button>
-      </section>
-
       <section className="profile-projects-section">
         <div className="profile-section-heading">
-          <span><strong>最近项目</strong><small>图片仅保存在本机</small></span>
+          <span><strong>本机项目</strong><small>图片和编辑记录仅保存在本机</small></span>
           <button onClick={() => notify('已打开全部历史记录')}>全部 <ChevronRight size={15} /></button>
         </div>
         <button className="profile-featured-project" onClick={() => { onOpenTool(recent[0].tool); notify(`已继续编辑「${recent[0].name}」`); }}>
@@ -938,23 +1044,29 @@ function ProfileScreen({ notify, onOpenTool, theme, onThemeChange, subscribed, o
 
       <button className={`profile-vip-status ${subscribed ? 'active' : ''}`} onClick={subscribed ? () => notify('会员管理已打开') : onUpgrade}>
         <span>{subscribed ? <BadgeCheck size={21} /> : <Crown size={21} fill="currentColor" />}</span>
-        <span><strong>{subscribed ? 'VIP 会员' : '截屏王 VIP'}</strong><small>{subscribed ? '全部高级功能已解锁' : '批量处理、高清导出与 VIP 模板'}</small></span>
+        <span><strong>{subscribed ? 'VIP 会员' : '截屏王 VIP'}</strong><small>{subscribed ? '本机高级工具与模板已解锁' : '高级长截图、批量隐私处理与专业模板'}</small></span>
         <span>{subscribed ? '管理订阅' : '了解权益'}<ChevronRight size={15} /></span>
       </button>
 
       <section className="profile-content-section">
-        <div className="profile-section-heading"><span><strong>我的内容</strong><small>模板与常用素材</small></span></div>
+        <div className="profile-section-heading"><span><strong>我的内容</strong><small>保存在本机的模板与照片</small></span></div>
         <div className="profile-menu">{menu.map(([title,hint,Icon]) => <button key={title} onClick={() => notify(`${title}已打开`)}><span><Icon size={18} /></span><span><strong>{title}</strong><small>{hint}</small></span><ChevronRight size={16} /></button>)}</div>
       </section>
 
       <section className="profile-preferences" id="profile-preferences">
-        <div className="profile-section-heading"><span><strong>偏好设置</strong><small>外观与使用体验</small></span></div>
+        <div className="profile-section-heading"><span><strong>设置</strong><small>本机权限与导出偏好</small></span></div>
         <div className="appearance-card">
           <div><span><Palette size={18} /></span><span><strong>外观模式</strong><small>跟随系统，或手动切换</small></span></div>
           <ThemeSwitcher theme={theme} onChange={(value) => { onThemeChange(value); notify(`已切换为${value === 'system' ? '自动' : value === 'light' ? '浅色' : '深色'}模式`); }} />
         </div>
+        <div className="profile-settings-list">
+          <button onClick={() => notify('照片权限设置已打开')}><span><Images size={18} /></span><span><strong>照片权限</strong><small>仅访问你选择的照片</small></span><b>已允许</b><ChevronRight size={16} /></button>
+          <button onClick={() => notify('导出设置已打开')}><span><Download size={18} /></span><span><strong>导出设置</strong><small>PNG · 高清 · 保留原始尺寸</small></span><ChevronRight size={16} /></button>
+          <button className="destructive" onClick={() => notify('清理前会再次确认，不会删除原图')}><span><Trash2 size={18} /></span><span><strong>清理历史</strong><small>移除本机编辑记录，不删除原图</small></span><ChevronRight size={16} /></button>
+          <button onClick={() => notify('帮助与反馈已打开')}><span><FileText size={18} /></span><span><strong>帮助与反馈</strong><small>使用说明与问题反馈</small></span><ChevronRight size={16} /></button>
+        </div>
       </section>
-      <div className="profile-links"><button onClick={() => notify('帮助与反馈已打开')}>帮助与反馈</button><span>·</span><button onClick={() => notify('隐私政策已打开')}>隐私政策</button><span>·</span><button onClick={() => notify('关于截屏王')}>关于我们</button></div>
+      <div className="profile-links"><button onClick={() => notify('服务协议已打开')}>服务协议</button><span>·</span><button onClick={() => notify('隐私政策已打开')}>隐私政策</button><span>·</span><button onClick={() => notify('关于截屏王')}>关于我们</button></div>
     </div>
   );
 }
