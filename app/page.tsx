@@ -46,7 +46,6 @@ import {
   Trash2,
   Undo2,
   UserRound,
-  WandSparkles,
   Wifi,
   type LucideIcon,
 } from 'lucide-react';
@@ -64,13 +63,6 @@ const navItems: Array<{ id: Tab; label: string; icon: LucideIcon }> = [
   { id: 'longshot', label: '长截图', icon: PanelsTopLeft },
   { id: 'tools', label: '工具', icon: Grid2X2 },
   { id: 'profile', label: '我的', icon: UserRound },
-];
-
-const homeToolCards: Array<{ id: ToolId; label: string; hint: string; scene: string; icon: LucideIcon }> = [
-  { id: 'redact', label: '智能打码', hint: '自动隐藏隐私', scene: '头像 · 昵称 · 手机号', icon: ShieldCheck },
-  { id: 'ocr', label: '文档扫描', hint: '照片变清晰，可复制文字', scene: '合同 · 票据 · 讲义', icon: ScanText },
-  { id: 'clean', label: '截图净化', hint: '一键清爽分享', scene: '状态栏 · 黑边 · 浮层', icon: Sparkles },
-  { id: 'annotate', label: '图片标注', hint: '突出重点内容', scene: '箭头 · 编号 · 高亮', icon: WandSparkles },
 ];
 
 const toolGroups: Array<{ title: string; items: Array<{ id: ToolId; label: string; hint: string; icon: LucideIcon; color: string; pro?: boolean }> }> = [
@@ -141,7 +133,7 @@ function ResultArtwork({ kind }: { kind: ResultArtworkKind }) {
   return (
     <span className={`result-art result-art-${kind}`} aria-hidden="true">
       <span className="result-art-glow" />
-      <FocusCorners className="result-focus" />
+      {kind === 'longshot' ? <FocusCorners className="result-focus" /> : null}
       {kind === 'longshot' ? <span className="art-longshot"><i /><i /><i /><em /><b>4 → 1</b></span> : null}
       {kind === 'redact' ? <span className="art-redact"><i /><i /><b /><i /><em /></span> : null}
       {kind === 'ocr' ? <span className="art-ocr"><i /><i /><i /><i /><b>TEXT</b></span> : null}
@@ -215,12 +207,13 @@ function ScreenHeader({ title, subtitle, back, onBack, trailing, large = false }
 }
 
 function HomeScreen({ onNavigate, onOpenTool, notify }: { onNavigate: (tab: Tab) => void; onOpenTool: (id: ToolId) => void; notify: (message: string) => void }) {
+  const resumableProject = recent[0];
+
   return (
     <div className="screen-scroll home-screen">
       <header className="topbar">
         <h1>截屏王</h1>
         <div className="top-actions">
-          <button className="top-sync-button" aria-label="打开 Mac 互传" onClick={() => notify('Mac 互传已打开')}><Monitor size={18} /><span>Mac 互传</span></button>
           <button className="icon-button" aria-label="设置" onClick={() => onNavigate('profile')}><Settings size={21} /></button>
         </div>
       </header>
@@ -229,38 +222,64 @@ function HomeScreen({ onNavigate, onOpenTool, notify }: { onNavigate: (tab: Tab)
         <span className="hero-orb hero-orb-one" /><span className="hero-orb hero-orb-two" />
         <FocusCorners className="hero-focus" />
         <span className="hero-copy">
-          <span className="hero-kicker"><Sparkles size={15} /> 本机已分析 6 张</span>
-          <strong>5 处重叠可自动清理</strong>
-          <small>2 个重复栏 · 预计减少 38%</small>
-          <span className="hero-actions"><button onClick={() => onNavigate('longshot')}>立即拼接</button><button onClick={() => notify('已保留这组截图')}>稍后处理</button></span>
+          <span className="hero-kicker"><Sparkles size={15} /> 智能发现</span>
+          <strong>6 张截图，<br />可拼成 1 张长图</strong>
+          <small>自动找到 5 处重叠 · 预计减少 38% 重复内容</small>
+          <span className="hero-actions"><button onClick={() => onNavigate('longshot')}>预览长图</button><button onClick={() => notify('已保留这组截图')}>稍后处理</button></span>
         </span>
-        <span className="hero-visual"><ResultArtwork kind="longshot" /><b className="hero-detected">可节省 38%</b></span>
+        <span className="hero-visual"><ResultArtwork kind="longshot" /><b className="hero-detected">已识别 6 张</b></span>
       </section>
 
-      <section className="section-block">
+      <section className="section-block home-recommendations">
         <div className="section-title"><h2>推荐处理</h2><button onClick={() => onNavigate('tools')}>全部工具 <span>›</span></button></div>
-        <div className="tool-grid">
-          {homeToolCards.map((tool) => {
-            const Icon = tool.icon;
-            return (
-              <button key={tool.id} className="tool-card" onClick={() => onOpenTool(tool.id)}>
-                <span className="tool-card-visual"><ResultArtwork kind={tool.id} /></span>
-                <span className="tool-card-copy"><span className="tool-icon blue"><Icon size={20} /></span><span><strong>{tool.label}</strong><small>{tool.hint}</small></span></span>
-                <span className="tool-card-scene">{tool.scene}</span>
-              </button>
-            );
-          })}
+        <div className="home-feature-stack">
+          <button className="home-redact-card" aria-label="打开智能打码" onClick={() => onOpenTool('redact')}>
+            <span className="home-feature-copy">
+              <span className="home-feature-heading"><span><ShieldCheck size={18} /></span><strong>智能打码</strong></span>
+              <small>一键隐藏聊天截图中的隐私</small>
+              <em>头像 · 昵称 · 手机号 · 二维码</em>
+            </span>
+            <span className="home-redact-comparison">
+              <span className="home-compare-shot home-redact-before"><ResultArtwork kind="redact" /><small>处理前</small></span>
+              <ArrowRight size={16} />
+              <span className="home-compare-shot home-redact-after"><ResultArtwork kind="redact" /><small>处理后</small></span>
+              <b>已识别 6 项</b>
+            </span>
+          </button>
+
+          <div className="home-medium-grid">
+            <button className="home-medium-card" aria-label="打开文档扫描" onClick={() => onOpenTool('ocr')}>
+              <span className="home-medium-art home-ocr-art"><ResultArtwork kind="ocr" /><b>可复制文字</b></span>
+              <span><strong>文档扫描</strong><small>清晰增强 + OCR</small></span>
+            </button>
+            <button className="home-medium-card" aria-label="打开截图净化" onClick={() => onOpenTool('clean')}>
+              <span className="home-medium-art home-clean-pair">
+                <span className="home-clean-before"><ResultArtwork kind="clean" /><i>前</i></span>
+                <span className="home-clean-after"><ResultArtwork kind="clean" /><i>后</i></span>
+              </span>
+              <span><strong>截图净化</strong><small>去状态栏 · 黑边 · 浮层</small></span>
+            </button>
+          </div>
+
+          <button className="home-annotation-row" aria-label="打开图片标注" onClick={() => onOpenTool('annotate')}>
+            <span className="home-annotation-icon"><SquarePen size={19} /></span>
+            <span><strong>图片标注</strong><small>箭头 · 编号 · 高亮</small></span>
+            <span className="home-annotation-demo" aria-hidden="true"><i>1</i><b /><em>↗</em></span>
+            <ChevronRight size={18} />
+          </button>
         </div>
       </section>
 
-      <section className="section-block home-continue-section">
-        <div className="section-title"><h2>继续处理</h2><button onClick={() => onNavigate('profile')}>查看全部 <span>›</span></button></div>
-        <button className="home-continue-card" onClick={() => onOpenTool(recent[0].tool)}>
-          <ResultArtwork kind={recent[0].tool} />
-          <span><strong>{recent[0].name}</strong><small>文档扫描 · 今天 14:30</small></span>
-          <b>继续 <ChevronRight size={14} /></b>
-        </button>
-      </section>
+      {resumableProject ? (
+        <section className="section-block home-continue-section">
+          <div className="section-title"><h2>继续处理</h2><button onClick={() => onNavigate('profile')}>查看全部 <span>›</span></button></div>
+          <button className="home-continue-card" onClick={() => onOpenTool(resumableProject.tool)}>
+            <ResultArtwork kind={resumableProject.tool} />
+            <span><strong>{resumableProject.name}</strong><small>文档扫描 · 今天 14:30</small></span>
+            <b>继续 <ChevronRight size={14} /></b>
+          </button>
+        </section>
+      ) : null}
     </div>
   );
 }
@@ -874,27 +893,66 @@ function PurchaseScreen({ onBack, notify, subscribed, onSubscribe }: { onBack: (
 }
 
 function ProfileScreen({ notify, onOpenTool, theme, onThemeChange, subscribed, onUpgrade }: { notify: (message: string) => void; onOpenTool: (id: ToolId) => void; theme: Theme; onThemeChange: (theme: Theme) => void; subscribed: boolean; onUpgrade: () => void }) {
+  const toolNames: Record<ToolId, string> = { redact:'智能打码', ocr:'文档扫描', clean:'截图净化', annotate:'图片标注', compare:'图片对比', idphoto:'证件照', qrcode:'二维码工具', export:'导出中心' };
   const menu = [
-    ['我的模板','管理收藏和草稿',LayoutGrid],['我的证件照','管理证件照',BadgeCheck],['Mac 端互传','跨设备管理截屏',Share2],
+    ['我的模板','收藏与未完成的排版',LayoutGrid],['我的证件照','查看已保存的证件照',BadgeCheck],
   ] as Array<[string,string,LucideIcon]>;
+  const openPreferences = () => {
+    document.getElementById('profile-preferences')?.scrollIntoView({ behavior:'smooth', block:'start' });
+    notify('已定位到偏好设置');
+  };
   return (
     <div className="screen-scroll app-screen profile-screen">
-      <ScreenHeader large title="我的" trailing={<button className="icon-button" onClick={() => notify('设置中心已打开')} aria-label="设置"><Settings size={20} /></button>} />
-      <div className="profile-card"><div className="profile-avatar"><UserRound size={31} /></div><span><strong>截屏小能手</strong><small>ID: 12345678 · {subscribed ? 'VIP 会员' : '普通会员'}</small></span><button onClick={() => notify('个人资料可编辑')}>编辑</button></div>
+      <ScreenHeader large title="我的" trailing={<button className="icon-button" onClick={openPreferences} aria-label="打开偏好设置"><Settings size={20} /></button>} />
+      <section className="profile-card profile-identity">
+        <div className="profile-avatar"><UserRound size={31} /></div>
+        <span><strong>截屏小能手</strong><small>ID: 12345678</small></span>
+        {subscribed ? <em><Crown size={12} fill="currentColor" />VIP</em> : null}
+        <button onClick={() => notify('个人资料可编辑')}>编辑</button>
+      </section>
+
+      <section className="profile-projects-section">
+        <div className="profile-section-heading">
+          <span><strong>最近项目</strong><small>图片仅保存在本机</small></span>
+          <button onClick={() => notify('已打开全部历史记录')}>全部 <ChevronRight size={15} /></button>
+        </div>
+        <button className="profile-featured-project" onClick={() => { onOpenTool(recent[0].tool); notify(`已继续编辑「${recent[0].name}」`); }}>
+          <ResultArtwork kind={recent[0].tool} />
+          <span>
+            <small>最近编辑</small>
+            <strong>{recent[0].name}</strong>
+            <em>{toolNames[recent[0].tool]} · {recent[0].meta}</em>
+            <b>继续编辑 <ArrowRight size={14} /></b>
+          </span>
+        </button>
+        <div className="profile-project-list">
+          {recent.slice(1).map((item) => (
+            <button key={item.name} onClick={() => { onOpenTool(item.tool); notify(`已继续编辑「${item.name}」`); }}>
+              <ResultArtwork kind={item.tool} />
+              <span><strong>{item.name}</strong><small>{toolNames[item.tool]} · {item.meta}</small></span>
+              <ChevronRight size={16} />
+            </button>
+          ))}
+        </div>
+      </section>
+
       <button className={`profile-vip-status ${subscribed ? 'active' : ''}`} onClick={subscribed ? () => notify('会员管理已打开') : onUpgrade}>
         <span>{subscribed ? <BadgeCheck size={21} /> : <Crown size={21} fill="currentColor" />}</span>
-        <span><strong>{subscribed ? 'VIP 已开通' : '开通 VIP 会员'}</strong><small>{subscribed ? '全部高级功能已解锁' : '无限长截图、批量隐私与结构化导出'}</small></span>
-        <span>{subscribed ? '管理' : '查看权益'}<ChevronRight size={15} /></span>
+        <span><strong>{subscribed ? 'VIP 会员' : '截屏王 VIP'}</strong><small>{subscribed ? '全部高级功能已解锁' : '批量处理、高清导出与 VIP 模板'}</small></span>
+        <span>{subscribed ? '管理订阅' : '了解权益'}<ChevronRight size={15} /></span>
       </button>
-      <div className="stats-card"><span><strong>128</strong><small>截屏总数</small></span><span><strong>36</strong><small>编辑图片</small></span><span><strong>12</strong><small>我的模板</small></span></div>
-      <section className="profile-history-card">
-        <div className="profile-history-head"><span><strong>历史记录</strong><small>最近处理的图片</small></span><button onClick={() => notify('已打开全部历史记录')}>查看全部 <ChevronRight size={14} /></button></div>
-        <div className="profile-history-list">{recent.map((item) => <button key={item.name} onClick={() => { onOpenTool(item.tool); notify(`已继续编辑「${item.name}」`); }}><ResultArtwork kind={item.tool} /><span><strong>{item.name}</strong><small>{item.meta}</small></span><ChevronRight size={16} /></button>)}</div>
+
+      <section className="profile-content-section">
+        <div className="profile-section-heading"><span><strong>我的内容</strong><small>模板与常用素材</small></span></div>
+        <div className="profile-menu">{menu.map(([title,hint,Icon]) => <button key={title} onClick={() => notify(`${title}已打开`)}><span><Icon size={18} /></span><span><strong>{title}</strong><small>{hint}</small></span><ChevronRight size={16} /></button>)}</div>
       </section>
-      <div className="profile-menu">{menu.map(([title,hint,Icon]) => <button key={title} onClick={() => notify(`${title}已打开`)}><span><Icon size={18} /></span><span><strong>{title}</strong><small>{hint}</small></span><ChevronRight size={16} /></button>)}</div>
-      <section className="appearance-card">
-        <div><span><Palette size={18} /></span><span><strong>外观</strong><small>跟随系统，或选择浅色与深色模式</small></span></div>
-        <ThemeSwitcher theme={theme} onChange={(value) => { onThemeChange(value); notify(`已切换为${value === 'system' ? '自动' : value === 'light' ? '浅色' : '深色'}模式`); }} />
+
+      <section className="profile-preferences" id="profile-preferences">
+        <div className="profile-section-heading"><span><strong>偏好设置</strong><small>外观与使用体验</small></span></div>
+        <div className="appearance-card">
+          <div><span><Palette size={18} /></span><span><strong>外观模式</strong><small>跟随系统，或手动切换</small></span></div>
+          <ThemeSwitcher theme={theme} onChange={(value) => { onThemeChange(value); notify(`已切换为${value === 'system' ? '自动' : value === 'light' ? '浅色' : '深色'}模式`); }} />
+        </div>
       </section>
       <div className="profile-links"><button onClick={() => notify('帮助与反馈已打开')}>帮助与反馈</button><span>·</span><button onClick={() => notify('隐私政策已打开')}>隐私政策</button><span>·</span><button onClick={() => notify('关于截屏王')}>关于我们</button></div>
     </div>
