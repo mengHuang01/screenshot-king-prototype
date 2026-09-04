@@ -57,7 +57,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { PhotoPicker, type PickedPhoto } from '@/components/photo-picker';
 
-type Tab = 'home' | 'longshot' | 'tools' | 'templates' | 'profile';
+type Tab = 'home' | 'longshot' | 'tools' | 'profile';
 type ToolId = 'redact' | 'ocr' | 'annotate' | 'idphoto' | 'watermark' | 'compress' | 'qrcode' | 'format';
 type Theme = 'system' | 'light' | 'dark';
 type Shot = PickedPhoto;
@@ -66,17 +66,14 @@ const navItems: Array<{ id: Tab; label: string; icon: LucideIcon }> = [
   { id: 'home', label: '首页', icon: Home },
   { id: 'longshot', label: '长截图', icon: PanelsTopLeft },
   { id: 'tools', label: '工具', icon: Grid2X2 },
-  { id: 'templates', label: '模板', icon: LayoutTemplate },
   { id: 'profile', label: '我的', icon: UserRound },
 ];
 
-const toolCards: Array<{ id: ToolId | 'longshot'; label: string; hint: string; icon: LucideIcon; color: string }> = [
-  { id: 'longshot', label: '长截图', hint: '自动去重拼接', icon: PanelsTopLeft, color: 'blue' },
-  { id: 'redact', label: '智能打码', hint: '自动隐藏隐私', icon: ShieldCheck, color: 'violet' },
-  { id: 'ocr', label: '图片转文字', hint: '保留段落格式', icon: ScanText, color: 'mint' },
-  { id: 'annotate', label: '图片标注', hint: '箭头与高亮', icon: WandSparkles, color: 'orange' },
-  { id: 'idphoto', label: '证件照', hint: '换底与标准尺寸', icon: BadgeCheck, color: 'cyan' },
-  { id: 'compress', label: '图片压缩', hint: '缩小体积不模糊', icon: ImageDown, color: 'slate' },
+const homeToolCards: Array<{ id: ToolId; label: string; hint: string; scene: string; icon: LucideIcon }> = [
+  { id: 'redact', label: '智能打码', hint: '自动隐藏隐私', scene: '头像 · 昵称 · 手机号', icon: ShieldCheck },
+  { id: 'ocr', label: '图片转文字', hint: '保留段落结构', scene: '支持复制与导出', icon: ScanText },
+  { id: 'annotate', label: '图片标注', hint: '突出重点内容', scene: '箭头 · 编号 · 高亮', icon: WandSparkles },
+  { id: 'idphoto', label: '证件照', hint: '自动构图换底色', scene: '一寸 · 二寸 · 考试', icon: BadgeCheck },
 ];
 
 const toolGroups: Array<{ title: string; items: Array<{ id: ToolId; label: string; hint: string; icon: LucideIcon; color: string; pro?: boolean }> }> = [
@@ -111,12 +108,6 @@ const recent = [
   { name: '产品需求文档截图', meta: '今天 14:30 · 1.2 MB', color: 'blue', tool: 'ocr' as ToolId },
   { name: '聊天记录截图', meta: '今天 11:05 · 1.8 MB', color: 'violet', tool: 'redact' as ToolId },
   { name: '订单详情截图', meta: '昨天 17:42 · 0.9 MB', color: 'orange', tool: 'annotate' as ToolId },
-];
-
-const outcomeCards = [
-  { id: 'nine-slice', title: '一张图，发成九宫格', hint: '自动切图并标记发布顺序', tag: '朋友圈', kind: 'ninegrid' as const },
-  { id: 'tutorial', title: '四步讲清操作流程', hint: '截图、编号和说明一次排好', tag: '工作教程', kind: 'annotate' as const },
-  { id: 'commerce', title: '把商品卖点排成长图', hint: '多图介绍，适合发布与分享', tag: '商品展示', kind: 'commerce' as const },
 ];
 
 function AppLogo() {
@@ -221,56 +212,42 @@ function ScreenHeader({ title, subtitle, back, onBack, trailing, large = false }
   );
 }
 
-function HomeScreen({ onNavigate, onOpenTool, onOpenTemplate, onUpgrade, theme, onThemeChange, subscribed }: { onNavigate: (tab: Tab) => void; onOpenTool: (id: ToolId) => void; onOpenTemplate: (id: string) => void; onUpgrade: () => void; theme: Theme; onThemeChange: (theme: Theme) => void; subscribed: boolean }) {
+function HomeScreen({ onNavigate, onOpenTool, notify }: { onNavigate: (tab: Tab) => void; onOpenTool: (id: ToolId) => void; notify: (message: string) => void }) {
   return (
     <div className="screen-scroll home-screen">
       <header className="topbar">
-        <div><span className="eyebrow">轻松截屏 · 高效处理</span><h1>截屏王</h1></div>
+        <h1>截屏王</h1>
         <div className="top-actions">
-          <button className="vip-pill" aria-label="打开会员购买页" onClick={onUpgrade}><Crown size={14} fill="currentColor" /> VIP</button>
-          <ThemeSwitcher theme={theme} onChange={onThemeChange} compact />
+          <button className="top-sync-button" aria-label="连接 Mac" onClick={() => notify('Mac 同步已打开')}><Monitor size={19} /><span>Mac</span></button>
           <button className="icon-button" aria-label="设置" onClick={() => onNavigate('profile')}><Settings size={21} /></button>
         </div>
       </header>
 
-      <button className="hero-card" onClick={() => onNavigate('longshot')}>
+      <section className="hero-card smart-task-card">
         <span className="hero-orb hero-orb-one" /><span className="hero-orb hero-orb-two" />
         <span className="hero-copy">
-          <span className="hero-kicker"><Sparkles size={15} /> 智能长截图</span>
-          <strong>多张截图，一次拼好</strong>
-          <small>自动排序、去重，清晰导出</small>
-          <span className="hero-cta">选择截图 <span>→</span></span>
+          <span className="hero-kicker"><Sparkles size={15} /> 发现 6 张连续截图</span>
+          <strong>看起来是一段聊天记录</strong>
+          <small>可自动排序、去重并拼成长图</small>
+          <span className="hero-actions"><button onClick={() => onNavigate('longshot')}>立即拼接</button><button onClick={() => notify('已保留这组截图')}>稍后处理</button></span>
         </span>
-        <span className="hero-visual"><ResultArtwork kind="longshot" /></span>
-      </button>
+        <span className="hero-visual"><ResultArtwork kind="longshot" /><b className="hero-detected">已识别 6 张</b></span>
+      </section>
 
       <section className="section-block">
         <div className="section-title"><h2>常用工具</h2><button onClick={() => onNavigate('tools')}>全部工具 <span>›</span></button></div>
         <div className="tool-grid">
-          {toolCards.map((tool) => {
+          {homeToolCards.map((tool) => {
             const Icon = tool.icon;
             return (
-              <button key={tool.id} className="tool-card" onClick={() => tool.id === 'longshot' ? onNavigate('longshot') : onOpenTool(tool.id)}>
-                <span className="tool-card-visual"><ResultArtwork kind={tool.id} /></span>
-                <span className="tool-card-copy"><span className={`tool-icon ${tool.color}`}><Icon size={18} /></span><span><strong>{tool.label}</strong><small>{tool.hint}</small></span></span>
+              <button key={tool.id} className="tool-card" onClick={() => onOpenTool(tool.id)}>
+                <span className="tool-card-copy"><span className="tool-icon blue"><Icon size={20} /></span><span><strong>{tool.label}</strong><small>{tool.hint}</small></span></span>
+                <span className="tool-card-scene">{tool.scene}</span>
               </button>
             );
           })}
         </div>
       </section>
-
-      <section className="section-block outcome-gallery">
-        <div className="section-title"><h2>看看能做什么</h2><button onClick={() => onNavigate('templates')}>更多模板 <span>›</span></button></div>
-        <div className="outcome-strip">
-          {outcomeCards.map((item) => <button key={item.id} onClick={() => onOpenTemplate(item.id)}><ResultArtwork kind={item.kind} /><span><b>{item.tag}</b><strong>{item.title}</strong><small>{item.hint}</small></span></button>)}
-        </div>
-      </section>
-
-      <button className="pro-banner" onClick={onUpgrade}>
-        <span className="pro-crown">{subscribed ? <BadgeCheck size={23} /> : <Crown size={23} fill="currentColor" />}</span>
-        <span><strong>{subscribed ? 'VIP 会员已开通' : '解锁截屏王 VIP'}</strong><small>{subscribed ? '全部高级工具和模板均可使用' : '无限长截图 · VIP 模板 · 高清导出'}</small></span>
-        <span className="pro-cta">{subscribed ? '查看权益' : '立即开通'}</span>
-      </button>
     </div>
   );
 }
@@ -382,7 +359,7 @@ function LongShotScreen({ notify }: { notify: (message: string) => void }) {
   );
 }
 
-function ToolsScreen({ onOpenTool }: { onOpenTool: (id: ToolId) => void }) {
+function ToolsScreen({ onOpenTool, onOpenTemplates }: { onOpenTool: (id: ToolId) => void; onOpenTemplates: () => void }) {
   const [search, setSearch] = useState('');
   const matches = (label: string, hint: string) => `${label}${hint}`.toLowerCase().includes(search.trim().toLowerCase());
   return (
@@ -404,6 +381,7 @@ function ToolsScreen({ onOpenTool }: { onOpenTool: (id: ToolId) => void }) {
           </section>
         );
       })}
+      {!search ? <section className="section-block creative-tools-section"><div className="section-title"><h2>创作工具</h2></div><button className="creative-template-card" onClick={onOpenTemplates}><span><em>模板与拼图</em><strong>把截图排成可以直接分享的作品</strong><small>九宫格、操作教程、对比图与商品长图</small><b>浏览模板 <ArrowRight size={14} /></b></span><span className="creative-template-art"><ResultArtwork kind="ninegrid" /><ResultArtwork kind="commerce" /></span></button></section> : null}
       {search && !toolGroups.some((group) => group.items.some((item) => matches(item.label, item.hint))) ? <div className="empty-search"><Search size={25} /><strong>没有找到“{search}”</strong><small>换个关键词试试</small></div> : null}
     </div>
   );
@@ -647,7 +625,7 @@ function TemplateArt({ template, spacing = 4, radius = 7, photos = [], showSlots
   })}</div></div>;
 }
 
-function TemplatesScreen({ onSelect, onUpgrade }: { onSelect: (id: string) => void; onUpgrade: () => void }) {
+function TemplatesScreen({ onSelect, onUpgrade, onBack }: { onSelect: (id: string) => void; onUpgrade: () => void; onBack: () => void }) {
   const [filter, setFilter] = useState('全部');
   const [accessFilter, setAccessFilter] = useState<'全部' | '免费' | 'VIP'>('全部');
   const visibleTemplates = templateThemes.filter((template) => {
@@ -658,7 +636,7 @@ function TemplatesScreen({ onSelect, onUpgrade }: { onSelect: (id: string) => vo
   const featuredTemplate = templateThemes.find((template) => template.id === 'nine-slice') ?? templateThemes[0];
   return (
     <div className="screen-scroll app-screen templates-screen">
-      <ScreenHeader large title="模板" trailing={<button className="vip-pill" aria-label="打开会员购买页" onClick={onUpgrade}><Crown size={13} fill="currentColor" />VIP</button>} />
+      <ScreenHeader title="模板" back onBack={onBack} trailing={<button className="vip-pill" aria-label="打开会员购买页" onClick={onUpgrade}><Crown size={13} fill="currentColor" />VIP</button>} />
       <button className="template-featured" onClick={() => onSelect(featuredTemplate.id)}><span><em><Crown size={11} fill="currentColor" />本周热门</em><strong>一张照片，铺满九宫格</strong><small>自动切成 9 张并标好顺序，发布后仍是一幅完整画面。</small><b>使用模板 <ArrowRight size={14} /></b></span><TemplateArt template={featuredTemplate} /></button>
       <div className="template-access-tabs" aria-label="模板权限筛选">
         <button className={accessFilter === '全部' ? 'active' : ''} onClick={() => setAccessFilter('全部')}>全部</button>
@@ -797,6 +775,7 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [activeTool, setActiveTool] = useState<ToolId | null>(null);
   const [activeTemplate, setActiveTemplate] = useState<string | null>(null);
+  const [templateLibraryOpen, setTemplateLibraryOpen] = useState(false);
   const [theme, setTheme] = useState<Theme>('system');
   const [systemDark, setSystemDark] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
@@ -809,9 +788,10 @@ export default function HomePage() {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(''), 2200);
   };
-  const navigate = (tab: Tab) => { setPurchaseOpen(false); setActiveTool(null); setActiveTemplate(null); setActiveTab(tab); };
-  const openTool = (id: ToolId) => { setPurchaseOpen(false); setActiveTemplate(null); setActiveTab('tools'); setActiveTool(id); };
-  const openTemplate = (id: string) => { setPurchaseOpen(false); setActiveTool(null); setActiveTab('templates'); setActiveTemplate(id); };
+  const navigate = (tab: Tab) => { setPurchaseOpen(false); setTemplateLibraryOpen(false); setActiveTool(null); setActiveTemplate(null); setActiveTab(tab); };
+  const openTool = (id: ToolId) => { setPurchaseOpen(false); setTemplateLibraryOpen(false); setActiveTemplate(null); setActiveTab('tools'); setActiveTool(id); };
+  const openTemplate = (id: string) => { setPurchaseOpen(false); setTemplateLibraryOpen(false); setActiveTool(null); setActiveTab('tools'); setActiveTemplate(id); };
+  const openTemplateLibrary = () => { setPurchaseOpen(false); setActiveTool(null); setActiveTemplate(null); setActiveTab('tools'); setTemplateLibraryOpen(true); };
   const openPurchase = () => setPurchaseOpen(true);
 
   useEffect(() => {
@@ -844,7 +824,7 @@ export default function HomePage() {
       try { void Promise.resolve(context.registerTool(tool, { signal: lifecycle.signal })).catch(() => undefined); } catch { /* Unsupported preview context. */ }
     };
     register({
-      name: 'navigate_screenshot_king', title: '打开截屏王模块', description: '切换到首页、长截图、工具、模板或我的页面。',
+      name: 'navigate_screenshot_king', title: '打开截屏王模块', description: '切换到首页、长截图、工具或我的页面。',
       inputSchema: { type:'object', properties:{ tab:{ type:'string', enum:navItems.map((item) => item.id) } }, required:['tab'], additionalProperties:false },
       annotations: { readOnlyHint:false, untrustedContentHint:false },
       execute(input) { const tab = (input as { tab?: string }).tab; if (!navItems.some((item) => item.id === tab)) throw new Error('未知模块'); navigate(tab as Tab); return { activeTab:tab }; },
@@ -868,10 +848,10 @@ export default function HomePage() {
   if (purchaseOpen) screen = <PurchaseScreen onBack={() => setPurchaseOpen(false)} notify={notify} subscribed={subscribed} onSubscribe={() => setSubscribed(true)} />;
   else if (activeTool) screen = <ToolDetail key={activeTool} id={activeTool} onBack={() => setActiveTool(null)} notify={notify} onUpgrade={openPurchase} subscribed={subscribed} />;
   else if (activeTemplate) screen = <TemplateEditor id={activeTemplate} onBack={() => setActiveTemplate(null)} notify={notify} onUpgrade={openPurchase} subscribed={subscribed} />;
-  else if (activeTab === 'home') screen = <HomeScreen onNavigate={navigate} onOpenTool={openTool} onOpenTemplate={openTemplate} onUpgrade={openPurchase} theme={theme} onThemeChange={setTheme} subscribed={subscribed} />;
+  else if (templateLibraryOpen) screen = <TemplatesScreen onSelect={openTemplate} onUpgrade={openPurchase} onBack={() => setTemplateLibraryOpen(false)} />;
+  else if (activeTab === 'home') screen = <HomeScreen onNavigate={navigate} onOpenTool={openTool} notify={notify} />;
   else if (activeTab === 'longshot') screen = <LongShotScreen notify={notify} />;
-  else if (activeTab === 'tools') screen = <ToolsScreen onOpenTool={openTool} />;
-  else if (activeTab === 'templates') screen = <TemplatesScreen onSelect={openTemplate} onUpgrade={openPurchase} />;
+  else if (activeTab === 'tools') screen = <ToolsScreen onOpenTool={openTool} onOpenTemplates={openTemplateLibrary} />;
   else screen = <ProfileScreen notify={notify} onOpenTool={openTool} theme={theme} onThemeChange={setTheme} subscribed={subscribed} onUpgrade={openPurchase} />;
 
   const showNav = !activeTool && !activeTemplate && !purchaseOpen;
@@ -897,7 +877,7 @@ export default function HomePage() {
                   return <button key={item.id} className={activeTab === item.id ? 'active' : ''} onClick={() => navigate(item.id)}><Icon size={20} /><span>{item.label}</span>{activeTab === item.id ? <ChevronRight size={16} /> : null}</button>;
                 })}
               </nav>
-              <div className="tablet-library"><span>资料库</span><button onClick={() => { navigate('profile'); notify('已打开历史记录'); }}><History size={17} />历史记录</button><button onClick={() => { navigate('templates'); notify('已打开我的模板'); }}><LayoutGrid size={17} />我的模板</button></div>
+              <div className="tablet-library"><span>资料库</span><button onClick={() => { navigate('profile'); notify('已打开历史记录'); }}><History size={17} />历史记录</button><button onClick={() => { openTemplateLibrary(); notify('已打开模板'); }}><LayoutGrid size={17} />模板</button></div>
               <div className="tablet-theme"><span>外观</span><ThemeSwitcher theme={theme} onChange={setTheme} /></div>
             </aside>
             <div className={`page-area ${showNav ? '' : 'full'}`}>{screen}</div>
